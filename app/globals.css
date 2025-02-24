@@ -2,20 +2,168 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 
+  Renk Değişkenleri: Açık ve koyu temada farklı değerleri tanımlayabilirsiniz.
+  Burada --background, --foreground, --font-sans vb. değerleri global olarak yönetiyoruz.
+*/
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* İsteğe bağlı: Animasyon süresi veya benzeri değişkenler */
+  --transition-duration: 200ms;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
+    /* Eğer Tailwind’de 'media' tercih ettiyseniz devreye girer */
     --background: #0a0a0a;
     --foreground: #ededed;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+/* Global Etiket Seviye Stiller: Base Layer */
+@layer base {
+  :root {
+    /* Font değişkenlerini projede atadığınız şekilde düzenleyebilirsiniz */
+    --font-sans: var(--font-poppins);
+    --font-mono: var(--font-jetbrains-mono);
+  }
+
+  /* HTML ve BODY stilleri */
+  html {
+    @apply text-gray-900;
+  }
+
+  /* .dark modunda text ve background’un koyu temaya geçişi */
+  .dark html {
+    @apply text-gray-100;
+  }
+
+  body {
+    color: var(--foreground);
+    background: var(--background);
+    font-family: var(--font-sans), sans-serif;
+    @apply bg-gray-50 transition-colors duration-200;
+  }
+
+  /* Karanlık modda gövde */
+  .dark body {
+    @apply bg-gray-900;
+  }
+
+  /* Başlıklar, paragraflar vb. */
+  h1 {
+    @apply text-3xl font-bold text-gray-900;
+  }
+  .dark h1 {
+    @apply text-gray-100;
+  }
+
+  h2 {
+    @apply text-2xl font-semibold text-gray-900;
+  }
+  .dark h2 {
+    @apply text-gray-100;
+  }
+
+  h3 {
+    @apply text-xl font-semibold text-gray-900;
+  }
+  .dark h3 {
+    @apply text-gray-100;
+  }
+
+  p {
+    @apply text-gray-700;
+  }
+  .dark p {
+    @apply text-gray-300;
+  }
+}
+
+/* Bileşen Katmanı (Components) */
+@layer components {
+  /* Button */
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium 
+           transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-500 text-white hover:bg-primary-600 focus:ring-primary-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-error-main text-white hover:bg-error-dark focus:ring-error-main;
+  }
+
+  .btn-success {
+    @apply btn bg-success-main text-white hover:bg-success-dark focus:ring-success-main;
+  }
+
+  /* Input */
+  .input {
+    @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm
+           disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500;
+  }
+
+  /* Label */
+  .label {
+    @apply block text-sm font-medium text-gray-700;
+  }
+
+  /* Karanlık modda label (opsiyonel) */
+  .dark .label {
+    @apply text-gray-300;
+  }
+
+  /* Card */
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 transition-colors duration-200;
+  }
+
+  .dark .card {
+    @apply bg-gray-800 border-gray-700 text-gray-100;
+  }
+
+  .card-header {
+    @apply px-6 py-4 border-b border-gray-200;
+  }
+  .dark .card-header {
+    @apply border-gray-700;
+  }
+
+  .card-body {
+    @apply px-6 py-4;
+  }
+
+  .card-footer {
+    @apply px-6 py-4 border-t border-gray-200;
+  }
+  .dark .card-footer {
+    @apply border-gray-700;
+  }
+}
+
+/* Yardımcı Sınıflar (Utilities) */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  /* Örnek: .visually-hidden (screen-reader-only) */
+  .visually-hidden {
+    @apply absolute w-px h-px p-0 -m-px overflow-hidden border-0;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+  }
 }
