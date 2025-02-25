@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export default function ExamLogin() {
@@ -9,8 +9,6 @@ export default function ExamLogin() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const examId = searchParams.get('exam')
   const supabase = createClientComponentClient()
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -25,7 +23,8 @@ export default function ExamLogin() {
     setError(null)
 
     try {
-      // Önce exam_students tablosundan öğrenci kodunu kontrol et
+      console.log('Aranan öğrenci kodu:', studentCode.trim())
+      
       const { data: examStudentData, error: examStudentError } = await supabase
         .from('exam_students')
         .select(`
@@ -33,72 +32,57 @@ export default function ExamLogin() {
           exam_id,
           student_id,
           student_code,
-          exam:exams (
+          exam:exams!inner (
             id,
             title,
             is_active
+          ),
+          student:students!inner (
+            id,
+            name,
+            surname
           )
         `)
         .eq('student_code', studentCode.trim())
         .single()
 
-      if (examStudentError) {
+      console.log('Sorgu sonucu:', { examStudentData, examStudentError })
+
+      if (examStudentError || !examStudentData) {
         console.error('Exam student error:', examStudentError)
-        setError('Öğrenci numarası bulunamadı')
-        setLoading(false)
+        setError('Öğrenci numarası bulunamadı. Lütfen doğru öğrenci numaranızı girdiğinizden emin olun.')
         return
       }
 
-      if (!examStudentData) {
-        setError('Öğrenci numarası bulunamadı')
-        setLoading(false)
+      if (!examStudentData.exam?.is_active) {
+        setError('Bu sınav henüz aktif değil')
         return
       }
 
-      // Şimdi öğrenci bilgilerini al
-      const { data: studentData, error: studentError } = await supabase
-        .from('students')
-        .select('*')
-        .eq('id', examStudentData.student_id)
-        .single()
+      // Öğrenci bilgilerini göster
+      console.log('Öğrenci:', examStudentData.student?.name, examStudentData.student?.surname)
 
-      if (studentError || !studentData) {
-        console.error('Student error:', studentError)
-        setError('Öğrenci bilgileri alınamadı')
-        setLoading(false)
-        return
-      }
+      // Sınav token'ını cookie'ye kaydet
+      const tokenData = {
+        examId: examStudentData.exam_id,
+        studentId: examStudentData.student_id,
+        studentCode: examStudentData.student_code,
+        studentName: examStudentData.student?.name,
+        studentSurname: examStudentData.student?.surname
+      };
 
-      // Belirli bir sınav için giriş yapılıyorsa kontrol et
-      if (examId && examStudentData.exam_id !== examId) {
-        setError('Bu öğrenci numarası bu sınava kayıtlı değil')
-        setLoading(false)
-        return
-      }
-
-      // Sınavın aktif olup olmadığını kontrol et
-      if (!examStudentData.exam.is_active) {
-        setError('Bu sınav henüz başlatılmamış')
-        setLoading(false)
-        return
-      }
-
-      // Öğrenci bilgilerini cookie'ye kaydet
-      const studentInfo = {
-        id: studentData.id,
-        name: studentData.name,
-        surname: studentData.surname,
-        code: studentData.code,
-        examStudentId: examStudentData.id
-      }
+      const token = btoa(JSON.stringify(tokenData));
       
-      document.cookie = `exam_student_data=${encodeURIComponent(JSON.stringify(studentInfo))}; path=/`
+      // Cookie'yi httpOnly olmadan ayarla
+      document.cookie = `exam_token=${token}; path=/`;
+      
+      // Sınav sayfasına yönlendir
+      router.push(`/exam/${examStudentData.exam_id}`)
 
-      // Sınava yönlendir
-      router.push(`/exam/${examStudentData.exam_id}?student=${studentData.id}`)
-    } catch (err) {
-      console.error('Login error:', err)
+    } catch (error) {
+      console.error('Login error:', error)
       setError('Giriş yapılırken bir hata oluştu')
+    } finally {
       setLoading(false)
     }
   }
@@ -109,9 +93,9 @@ export default function ExamLogin() {
         <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-white/10">
           {/* Logo */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 mx-auto bg-blue-600 rounded-2xl flex items-center justify-center transform rotate-45 shadow-xl mb-4">
+            <div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-xl mb-4">
               <svg 
-                className="w-8 h-8 text-white transform -rotate-45" 
+                className="w-8 h-8 text-white" 
                 fill="none" 
                 stroke="currentColor" 
                 viewBox="0 0 24 24"
@@ -130,30 +114,46 @@ export default function ExamLogin() {
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label htmlFor="studentCode" className="block text-sm font-medium text-white/80 mb-2">
+              <label htmlFor="studentCode" className="block text-sm font-medium text-white/90 mb-2">
                 Öğrenci Numarası
               </label>
-              <input
-                id="studentCode"
-                type="text"
-                value={studentCode}
-                onChange={(e) => setStudentCode(e.target.value)}
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                placeholder="Öğrenci numaranızı giriniz"
-                required
-              />
+              <div className="relative">
+                <input
+                  id="studentCode"
+                  type="text"
+                  value={studentCode}
+                  onChange={(e) => setStudentCode(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Öğrenci numaranızı giriniz"
+                  required
+                />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+              </div>
             </div>
 
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
-                <p className="text-red-400 text-sm">{error}</p>
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-400">{error}</p>
+                  </div>
+                </div>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
@@ -167,13 +167,13 @@ export default function ExamLogin() {
                 'Giriş Yap'
               )}
             </button>
-          </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-white/40 text-sm">
-              Sınav sistemine hoş geldiniz
-            </p>
-          </div>
+            <div className="mt-6 text-center">
+              <p className="text-white/40 text-sm">
+                Sınav sistemine hoş geldiniz
+              </p>
+            </div>
+          </form>
         </div>
       </div>
     </div>

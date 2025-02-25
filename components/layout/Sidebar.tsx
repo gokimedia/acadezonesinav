@@ -22,7 +22,6 @@ interface SidebarProps {
 const navigation = [
   { name: 'Ana Sayfa', href: '/panel', icon: Home },
   { name: 'Sınavlar', href: '/panel/sinavlar', icon: BookOpen },
-  { name: 'Öğrenciler', href: '/panel/ogrenciler', icon: Users },
   { name: 'Bölümler', href: '/panel/bolumler', icon: GraduationCap },
   { name: 'Sonuçlar', href: '/panel/sonuclar', icon: BarChart3 },
   { name: 'Ayarlar', href: '/panel/ayarlar', icon: Settings },
