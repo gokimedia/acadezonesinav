@@ -80,7 +80,7 @@ export default function CreateExam() {
 
       if (error) throw error
       setDepartments(data || [])
-    } catch (err) {
+    } catch (err: any) {
       console.error('Bölümler yüklenirken hata:', err)
       setError('Bölümler yüklenirken bir hata oluştu')
       toast.error('Bölümler yüklenirken bir hata oluştu')
@@ -88,7 +88,7 @@ export default function CreateExam() {
   }
 
   const validateExamInfo = () => {
-    if (!formData.title) {
+    if (!formData.title || !formData.title.trim()) {
       toast.error('Lütfen sınav adını giriniz')
       return false
     }
@@ -104,11 +104,36 @@ export default function CreateExam() {
       toast.error('Lütfen bitiş tarihini giriniz')
       return false
     }
+    
+    // Tarih geçerliliğini kontrol et
+    try {
+      const startDate = new Date(formData.start_date)
+      const endDate = new Date(formData.end_date)
+      
+      if (isNaN(startDate.getTime())) {
+        toast.error('Geçersiz başlangıç tarihi')
+        return false
+      }
+      
+      if (isNaN(endDate.getTime())) {
+        toast.error('Geçersiz bitiş tarihi')
+        return false
+      }
+      
+      if (endDate <= startDate) {
+        toast.error('Bitiş tarihi başlangıç tarihinden sonra olmalıdır')
+        return false
+      }
+    } catch (error) {
+      toast.error('Tarih formatı geçersiz')
+      return false
+    }
+    
     return true
   }
 
   const handleQuestionAdd = () => {
-    if (!currentQuestion.question_text.trim()) {
+    if (!currentQuestion.question_text || !currentQuestion.question_text.trim()) {
       toast.error('Lütfen soru metnini giriniz')
       return
     }
@@ -125,12 +150,22 @@ export default function CreateExam() {
         toast.error('Lütfen doğru cevabı seçiniz')
         return
       }
-    } else if (currentQuestion.question_type === 'fill' && !currentQuestion.correct_answer) {
+    } else if (currentQuestion.question_type === 'fill' && 
+               (!currentQuestion.correct_answer || 
+                (typeof currentQuestion.correct_answer === 'string' && !currentQuestion.correct_answer.trim()))) {
       toast.error('Lütfen doğru cevabı giriniz')
       return
     }
 
-    setQuestions([...questions, currentQuestion])
+    // UUID benzersiz olmalı
+    const newQuestion = {
+      ...currentQuestion,
+      id: crypto.randomUUID()
+    }
+    
+    setQuestions([...questions, newQuestion])
+    
+    // Yeni soruyu resetle
     setCurrentQuestion({
       id: crypto.randomUUID(),
       question_text: '',
@@ -147,6 +182,22 @@ export default function CreateExam() {
     setQuestions(questions.filter((q) => q.id !== questionId))
     toast.success('Soru silindi')
   }
+
+  const formatDateForDB = (dateString: string) => {
+    if (!dateString) return null;
+    try {
+      const date = new Date(dateString);
+      // Invalid date kontrolü
+      if (isNaN(date.getTime())) {
+        console.error('Invalid date detected:', dateString);
+        return null;
+      }
+      return date.toISOString();
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      return null;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -170,12 +221,12 @@ export default function CreateExam() {
       const { data: examData, error: examError } = await supabase
         .from('exams')
         .insert({
-          title: formData.title,
-          description: formData.description,
+          title: formData.title.trim(),
+          description: formData.description.trim(),
           department_id: formData.department_id,
           duration: Number(formData.duration),
-          start_date: formData.start_date,
-          end_date: formData.end_date,
+          start_date: formatDateForDB(formData.start_date),
+          end_date: formatDateForDB(formData.end_date),
           passing_grade: formData.passing_grade,
           is_active: false
         })
@@ -186,21 +237,32 @@ export default function CreateExam() {
       if (!examData) throw new Error('Sınav oluşturulamadı')
 
       // Then, add the questions
+      const questionsToInsert = questions.map((q) => {
+        // Doğru cevap için karakter kısıtlaması kontrolü
+        let correctAnswer = q.correct_answer;
+        
+        // Eğer karakter(1) sınırlaması varsa ve string ise
+        if (typeof correctAnswer === 'string' && q.question_type === 'multiple_choice') {
+          // İlk karakteri al
+          correctAnswer = correctAnswer.charAt(0);
+        }
+        
+        return {
+          exam_id: examData.id,
+          question_text: q.question_text.trim(),
+          question_type: q.question_type,
+          option_a: q.question_type === 'multiple_choice' ? q.options[0]?.trim() || null : null,
+          option_b: q.question_type === 'multiple_choice' ? q.options[1]?.trim() || null : null,
+          option_c: q.question_type === 'multiple_choice' ? q.options[2]?.trim() || null : null,
+          option_d: q.question_type === 'multiple_choice' ? q.options[3]?.trim() || null : null,
+          correct_answer: correctAnswer,
+          points: q.points || 1
+        }
+      })
+
       const { error: questionsError } = await supabase
         .from('questions')
-        .insert(
-          questions.map((q) => ({
-            exam_id: examData.id,
-            question_text: q.question_text,
-            question_type: q.question_type,
-            option_a: q.question_type === 'multiple_choice' ? q.options[0] : null,
-            option_b: q.question_type === 'multiple_choice' ? q.options[1] : null,
-            option_c: q.question_type === 'multiple_choice' ? q.options[2] : null,
-            option_d: q.question_type === 'multiple_choice' ? q.options[3] : null,
-            correct_answer: q.correct_answer,
-            points: q.points
-          }))
-        )
+        .insert(questionsToInsert)
 
       if (questionsError) {
         console.error('Sorular eklenirken hata:', questionsError.message)
@@ -209,7 +271,7 @@ export default function CreateExam() {
 
       toast.success('Sınav başarıyla oluşturuldu!')
       router.push('/panel/sinavlar')
-    } catch (err) {
+    } catch (err: any) {
       const errorMessage = err instanceof Error ? err.message : 'Beklenmeyen bir hata oluştu'
       console.error('Sınav oluşturulurken hata:', errorMessage)
       setError(errorMessage)
@@ -218,6 +280,19 @@ export default function CreateExam() {
       setLoading(false)
     }
   }
+
+  const updateEndDate = (startDate: string, durationMinutes: number) => {
+    try {
+      const start = new Date(startDate);
+      if (isNaN(start.getTime())) return '';
+      
+      const end = new Date(start.getTime() + durationMinutes * 60000);
+      return end.toISOString().slice(0, 16);
+    } catch (error) {
+      console.error('End date calculation error:', error);
+      return '';
+    }
+  };
 
   return (
     <div className="space-y-6 pb-8">
@@ -343,7 +418,7 @@ export default function CreateExam() {
                       type="number"
                       value={formData.passing_grade}
                       onChange={(e) => setFormData({ ...formData, passing_grade: Number(e.target.value) })}
-                                                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500 text-gray-900"
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500 text-gray-900"
                       min="1"
                       max="100"
                       required
@@ -359,13 +434,18 @@ export default function CreateExam() {
                       type="datetime-local"
                       value={formData.start_date}
                       onChange={(e) => {
-                        const startDate = new Date(e.target.value);
-                        const endDate = new Date(startDate.getTime() + formData.duration * 60000);
-                        setFormData({ 
-                          ...formData, 
-                          start_date: e.target.value,
-                          end_date: endDate.toISOString().slice(0, 16)
-                        });
+                        try {
+                          const startDate = e.target.value;
+                          const endDate = updateEndDate(startDate, formData.duration);
+                          
+                          setFormData({ 
+                            ...formData, 
+                            start_date: startDate,
+                            end_date: endDate || formData.end_date
+                          });
+                        } catch (error) {
+                          console.error('Date input error:', error);
+                        }
                       }}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                       required
@@ -381,19 +461,24 @@ export default function CreateExam() {
                       type="number"
                       value={formData.duration}
                       onChange={(e) => {
-                        const newDuration = parseInt(e.target.value);
-                        if (newDuration > 0 && formData.start_date) {
-                          const startDate = new Date(formData.start_date);
-                          const endDate = new Date(startDate.getTime() + newDuration * 60000);
-                          setFormData({ 
-                            ...formData, 
-                            duration: newDuration,
-                            end_date: endDate.toISOString().slice(0, 16)
-                          });
-                        } else {
+                        try {
+                          const newDuration = parseInt(e.target.value) || 0;
+                          let updatedEndDate = formData.end_date;
+                          
+                          if (newDuration > 0 && formData.start_date) {
+                            updatedEndDate = updateEndDate(formData.start_date, newDuration);
+                          }
+                          
                           setFormData({
                             ...formData,
-                            duration: newDuration
+                            duration: newDuration,
+                            end_date: updatedEndDate || formData.end_date
+                          });
+                        } catch (error) {
+                          console.error('Duration change error:', error);
+                          setFormData({
+                            ...formData,
+                            duration: parseInt(e.target.value) || 0
                           });
                         }
                       }}
@@ -624,9 +709,19 @@ export default function CreateExam() {
                           </label>
                           <select
                             value={currentQuestion.correct_answer as string}
-                            onChange={(e) =>
-                              setCurrentQuestion({ ...currentQuestion, correct_answer: e.target.value })
-                            }
+                            onChange={(e) => {
+                              // Doğru cevap olarak tam option değerini değil, sadece seçeneğin kendisini (A, B, C, D) sakla
+                              const selectedOption = e.target.value;
+                              const optionIndex = currentQuestion.options.findIndex(opt => opt === selectedOption);
+                              
+                              // Veritabanında character(1) sınırlaması varsa:
+                              // const correctAnswer = optionIndex >= 0 ? String.fromCharCode(97 + optionIndex) : '';
+                              
+                              setCurrentQuestion({ 
+                                ...currentQuestion, 
+                                correct_answer: selectedOption 
+                              });
+                            }}
                             className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500 text-gray-900"
                           >
                             <option value="">Doğru cevabı seçin</option>
