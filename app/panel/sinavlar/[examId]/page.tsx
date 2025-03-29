@@ -10,9 +10,15 @@ import { Clock, Users, FileText } from 'lucide-react';
 
 interface Question {
   id: string;
-  question: string;
-  options: string[] | null;
-  correct_answer: string;
+  question_text: string;
+  question_type: 'multiple_choice' | 'true_false' | 'fill';
+  options: string[];
+  correct_answer: string | boolean;
+  points: number;
+  option_a?: string;
+  option_b?: string;
+  option_c?: string;
+  option_d?: string;
 }
 
 interface Exam {
@@ -47,13 +53,63 @@ export default function ExamDetailPage({ params }: { params: Promise<{ examId: s
 
         setExam(examData);
 
+        // Fetch questions with a console log to debug
         const { data: questionData, error: questionError } = await supabase
           .from('questions')
           .select('*')
           .eq('exam_id', examId);
 
         if (questionError) throw questionError;
-        setQuestions(questionData || []);
+        
+        console.log('Ham soru verileri:', questionData);
+        
+        // Format questions from database
+        const formattedQuestions = (questionData || []).map(q => {
+          console.log('İşleniyor:', q);
+          
+          // Extract options from individual fields
+          const options: string[] = [];
+          if (q.option_a) options.push(q.option_a);
+          if (q.option_b) options.push(q.option_b);
+          if (q.option_c) options.push(q.option_c);
+          if (q.option_d) options.push(q.option_d);
+
+          console.log('Oluşturulan seçenekler:', options);
+
+          let correctAnswer = q.correct_answer;
+          
+          // Convert letter answer (A, B, C, D) to full option text for multiple choice questions
+          if (q.question_type === 'multiple_choice' && q.correct_answer) {
+            console.log('Çoktan seçmeli soru, doğru cevap:', q.correct_answer);
+            const letterCode = q.correct_answer.charCodeAt(0);
+            // If it's A, B, C, D (65, 66, 67, 68)
+            if (letterCode >= 65 && letterCode <= 68) {
+              const optionIndex = letterCode - 65; // A=0, B=1, C=2, D=3
+              console.log('Harf kodu:', letterCode, 'İndeks:', optionIndex);
+              if (options[optionIndex]) {
+                correctAnswer = options[optionIndex];
+                console.log('Doğru cevap metni:', correctAnswer);
+              }
+            }
+          } else if (q.question_type === 'true_false') {
+            // Doğru/Yanlış soruları için boolean değere dönüştürme
+            console.log('Doğru/Yanlış soru, ham cevap:', q.correct_answer);
+            correctAnswer = q.correct_answer === 'true' || q.correct_answer === true;
+            console.log('İşlenmiş doğru/yanlış cevap:', correctAnswer);
+          }
+          
+          const processedQuestion = {
+            ...q,
+            options: options,
+            correct_answer: correctAnswer
+          };
+          
+          console.log('İşlenmiş soru:', processedQuestion);
+          return processedQuestion;
+        });
+        
+        console.log('Tüm formatlanmış sorular:', formattedQuestions);
+        setQuestions(formattedQuestions);
       } catch (err) {
         console.error('Sınav yüklenirken hata:', err);
         setError(err instanceof Error ? err.message : 'Sınav yüklenirken bir hata oluştu');
@@ -177,26 +233,76 @@ export default function ExamDetailPage({ params }: { params: Promise<{ examId: s
           <div className="space-y-6">
             {questions.map((question, index) => (
               <div key={question.id} className="border-b border-gray-200 pb-6 last:border-0 last:pb-0">
-                <h3 className="text-base font-medium text-gray-900 mb-2">
-                  {index + 1}. {question.question}
-                </h3>
+                <div className="flex justify-between mb-2">
+                  <h3 className="text-base font-medium text-gray-900">
+                    {index + 1}. {question.question_text}
+                  </h3>
+                  <span className="text-sm font-medium px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                    {question.points} Puan
+                  </span>
+                </div>
+                
                 <div className="space-y-2 ml-6">
-                  {question.options?.map((option, optionIndex) => (
-                    <div
-                      key={optionIndex}
-                      className={`p-2 rounded-md ${
-                        option === question.correct_answer
-                          ? 'bg-success-50 text-success-700'
-                          : 'bg-gray-50'
-                      }`}
-                    >
-                      {option}
-                      {option === question.correct_answer && (
-                        <span className="ml-2 text-success-500">(Doğru Cevap)</span>
-                      )}
+                  {question.question_type === 'multiple_choice' && question.options && question.options.length > 0 ? (
+                    question.options.map((option, optionIndex) => (
+                      <div
+                        key={optionIndex}
+                        className={`p-3 rounded-md ${
+                          String(option) === String(question.correct_answer)
+                            ? 'bg-green-50 border border-green-200 text-green-800'
+                            : 'bg-gray-50 border border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-center">
+                          <span className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-gray-700 mr-2">
+                            {String.fromCharCode(65 + optionIndex)}
+                          </span>
+                          <span>{option}</span>
+                          {String(option) === String(question.correct_answer) && (
+                            <span className="ml-auto text-sm font-medium text-green-600 flex items-center">
+                              &#10003; Doğru Cevap
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : question.question_type === 'true_false' ? (
+                    <div className="flex gap-4">
+                      <div 
+                        className={`p-3 rounded-md flex items-center gap-2 ${
+                          question.correct_answer === true 
+                            ? 'bg-green-50 border border-green-200 text-green-800' 
+                            : 'bg-gray-50 border border-gray-200'
+                        }`}
+                      >
+                        <span>Doğru</span>
+                        {question.correct_answer === true && (
+                          <span className="ml-2 text-sm font-medium text-green-600">&#10003; Doğru Cevap</span>
+                        )}
+                      </div>
+                      <div 
+                        className={`p-3 rounded-md flex items-center gap-2 ${
+                          question.correct_answer === false 
+                            ? 'bg-green-50 border border-green-200 text-green-800' 
+                            : 'bg-gray-50 border border-gray-200'
+                        }`}
+                      >
+                        <span>Yanlış</span>
+                        {question.correct_answer === false && (
+                          <span className="ml-2 text-sm font-medium text-green-600">&#10003; Doğru Cevap</span>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                  {!question.options && (
+                  ) : question.question_type === 'fill' ? (
+                    <div className="p-3 rounded-md bg-green-50 border border-green-200 text-green-800">
+                      <div className="flex items-center">
+                        <span className="font-medium mr-2">Doğru Cevap:</span>
+                        <span className="bg-white px-3 py-1 rounded border border-green-200">
+                          {question.correct_answer}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
                     <div className="text-gray-500 italic">
                       Bu soru için seçenekler bulunmamaktadır.
                     </div>

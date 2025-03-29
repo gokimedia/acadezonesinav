@@ -14,7 +14,7 @@ const nextConfig = {
     return config
   },
   images: {
-    domains: ['localhost'],
+    domains: ['localhost', 'acadezone.s3.eu-central-1.amazonaws.com'],
   },
 }
 

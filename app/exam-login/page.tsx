@@ -3,6 +3,31 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import Image from 'next/image'
+
+// Tip tanımlamaları
+type ExamType = {
+  id: string;
+  title: string;
+  is_active: boolean;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+type StudentType = {
+  id: string;
+  name: string;
+  surname: string;
+}
+
+type ExamStudentData = {
+  id: string;
+  exam_id: string;
+  student_id: string;
+  student_code: string;
+  exam: ExamType;
+  student: StudentType;
+}
 
 export default function ExamLogin() {
   const [studentCode, setStudentCode] = useState('')
@@ -25,7 +50,8 @@ export default function ExamLogin() {
     try {
       console.log('Aranan öğrenci kodu:', studentCode.trim())
       
-      const { data: examStudentData, error: examStudentError } = await supabase
+      // İlk olarak exam_students tablosunda bu kodu arayalım
+      const { data: examStudentsData, error: examStudentError } = await supabase
         .from('exam_students')
         .select(`
           id,
@@ -35,7 +61,9 @@ export default function ExamLogin() {
           exam:exams!inner (
             id,
             title,
-            is_active
+            is_active,
+            start_date,
+            end_date
           ),
           student:students!inner (
             id,
@@ -46,29 +74,39 @@ export default function ExamLogin() {
         .eq('student_code', studentCode.trim())
         .single()
 
-      console.log('Sorgu sonucu:', { examStudentData, examStudentError })
+      console.log('Sorgu sonucu:', { examStudentsData, examStudentError })
 
-      if (examStudentError || !examStudentData) {
+      if (examStudentError || !examStudentsData) {
+        // Eğer exam_students'da bulunamazsa, belki öğrenci henüz bir sınava atanmamıştır
         console.error('Exam student error:', examStudentError)
-        setError('Öğrenci numarası bulunamadı. Lütfen doğru öğrenci numaranızı girdiğinizden emin olun.')
+        setError('Girdiğiniz kod ile eşleşen bir sınav kaydı bulunamadı. Lütfen kodu kontrol edin veya sınav yöneticinize başvurun.')
         return
       }
 
-      if (!examStudentData.exam?.is_active) {
-        setError('Bu sınav henüz aktif değil')
+      const typedExamStudentData = examStudentsData as unknown as ExamStudentData;
+
+      // Sınav aktif mi kontrol et
+      if (!typedExamStudentData.exam.is_active) {
+        setError('Bu sınav aktif değil. Sınav yöneticinizin sınavı başlatmasını bekleyin.')
         return
       }
-
+      
+      // Bitiş tarihi varsa ve geçmişse sınava artık girilemez
+      if (typedExamStudentData.exam.end_date && new Date(typedExamStudentData.exam.end_date) < new Date()) {
+        setError('Bu sınavın süresi dolmuş. Artık giriş yapamazsınız.')
+        return
+      }
+      
       // Öğrenci bilgilerini göster
-      console.log('Öğrenci:', examStudentData.student?.name, examStudentData.student?.surname)
+      console.log('Öğrenci:', typedExamStudentData.student.name, typedExamStudentData.student.surname)
 
       // Sınav token'ını cookie'ye kaydet
       const tokenData = {
-        examId: examStudentData.exam_id,
-        studentId: examStudentData.student_id,
-        studentCode: examStudentData.student_code,
-        studentName: examStudentData.student?.name,
-        studentSurname: examStudentData.student?.surname
+        examId: typedExamStudentData.exam_id,
+        studentId: typedExamStudentData.student_id,
+        studentCode: typedExamStudentData.student_code,
+        studentName: typedExamStudentData.student.name,
+        studentSurname: typedExamStudentData.student.surname
       };
 
       const token = btoa(JSON.stringify(tokenData));
@@ -77,11 +115,11 @@ export default function ExamLogin() {
       document.cookie = `exam_token=${token}; path=/`;
       
       // Sınav sayfasına yönlendir
-      router.push(`/exam/${examStudentData.exam_id}`)
+      router.push(`/exam/${typedExamStudentData.exam_id}`)
 
     } catch (error) {
       console.error('Login error:', error)
-      setError('Giriş yapılırken bir hata oluştu')
+      setError('Giriş yapılırken bir hata oluştu. Lütfen daha sonra tekrar deneyin.')
     } finally {
       setLoading(false)
     }
@@ -93,20 +131,15 @@ export default function ExamLogin() {
         <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-white/10">
           {/* Logo */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-xl mb-4">
-              <svg 
-                className="w-8 h-8 text-white" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={2} 
-                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" 
-                />
-              </svg>
+            <div className="mx-auto mb-4 flex justify-center">
+              <Image 
+                src="https://acadezone.s3.eu-central-1.amazonaws.com/email-assets/mavi.png" 
+                alt="Acadezone Logo" 
+                width={120} 
+                height={40}
+                className="h-12 w-auto"
+                priority
+              />
             </div>
             <h2 className="text-3xl font-bold text-white mb-2">Sınav Girişi</h2>
             <div className="h-1 w-16 bg-gradient-to-r from-blue-500 to-purple-500 mx-auto rounded-full"></div>

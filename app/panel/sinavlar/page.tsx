@@ -4,7 +4,26 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { formatDate } from '@/lib/formatDate'
-import { Plus, Edit, Trash2, Play, Pause, Users, BarChart3, ExternalLink, Clock, Calendar } from 'lucide-react'
+import { 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Play, 
+  Pause, 
+  Users, 
+  BarChart3, 
+  ExternalLink, 
+  Clock, 
+  Calendar,
+  Search,
+  Filter,
+  ArrowUpRight,
+  GraduationCap,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Copy
+} from 'lucide-react'
 import { Tooltip } from '@/components/common/Tooltip'
 
 interface Exam {
@@ -69,7 +88,6 @@ export default function Sinavlar() {
       setActionLoading(examId);
       setError('');
 
-      // Sınavın durumunu güncelle
       const { error: examError } = await supabase
         .from('exams')
         .update({ 
@@ -80,14 +98,12 @@ export default function Sinavlar() {
 
       if (examError) throw examError;
 
-      // State'i güncelle
       setExams(exams.map(exam => 
         exam.id === examId 
           ? { ...exam, is_active: !currentStatus }
           : exam
       ));
 
-      // Başarı mesajı göster
       showNotification(
         currentStatus ? 'Sınav durduruldu' : 'Sınav başlatıldı',
         currentStatus ? 'red' : 'green'
@@ -102,33 +118,151 @@ export default function Sinavlar() {
   }
 
   const deleteExam = async (examId: string) => {
-    if (!confirm('Bu sınavı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) return;
-    
+    if (!window.confirm('Bu sınavı ve tüm sonuçlarını silmek istediğinizden emin misiniz?\nBu işlem geri alınamaz.')) {
+      return;
+    }
+
+    setActionLoading(examId);
+    setError('');
+
     try {
-      setActionLoading(examId);
-      
-      // Önce sınavla ilişkili tüm soruları sil
-      const { error: questionsError } = await supabase
-        .from('questions')
-        .delete()
+      // Önce veritabanındaki ilişkili tablolardan bir kontrol yapalım
+      const { data: relatedResults, error: checkResultsError } = await supabase
+        .from('results')
+        .select('id')
         .eq('exam_id', examId);
 
-      if (questionsError) throw questionsError;
+      if (checkResultsError) {
+        console.error('Sonuçlar kontrol edilirken hata:', checkResultsError);
+        throw new Error('Sonuçlar kontrol edilirken bir hata oluştu: ' + checkResultsError.message);
+      }
 
-      // Sonra sınavı sil
-      const { error: examError } = await supabase
-        .from('exams')
-        .delete()
-        .eq('id', examId);
+      console.log(`${relatedResults?.length || 0} adet sonuç bulundu`);
 
-      if (examError) throw examError;
+      if (relatedResults && relatedResults.length > 0) {
+        // Önce results tablosundaki kayıtları silmeyi deneyeceğiz
+        console.log('Sonuçlar siliniyor...');
+        const { error: resultsDeleteError } = await supabase
+          .from('results')
+          .delete()
+          .eq('exam_id', examId);
+
+        if (resultsDeleteError) {
+          console.error('Sonuçlar silinirken hata:', resultsDeleteError);
+          throw new Error('Sonuçlar silinirken bir hata oluştu: ' + resultsDeleteError.message);
+        }
+      }
+
+      // SQL sorgusu ile silmeyi deneyelim
+      const { error: rpcError } = await supabase.rpc('delete_exam', {
+        exam_id: examId
+      });
+
+      if (rpcError) {
+        console.error('Silme işlemi sırasında hata:', rpcError);
+        
+        // Alternatif olarak exams tablosundan doğrudan silmeyi deneyelim
+        const { error: examError } = await supabase
+          .from('exams')
+          .delete()
+          .eq('id', examId);
+        
+        if (examError) {
+          throw new Error('Sınav silinirken bir hata oluştu: ' + examError.message);
+        }
+      }
 
       setExams(exams.filter(exam => exam.id !== examId));
-      
       showNotification('Sınav başarıyla silindi', 'blue');
-    } catch (err) {
-      console.error('Sınav silinirken hata:', err);
-      setError('Sınav silinirken bir hata oluştu');
+    } catch (err: any) {
+      console.error('Sınav silme işlemi sırasında hata:', err);
+      setError(err.message || 'Sınav silinirken beklenmeyen bir hata oluştu');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  const cloneExam = async (examId: string) => {
+    if (!window.confirm('Bu sınavın bir kopyasını oluşturmak istediğinizden emin misiniz?')) {
+      return;
+    }
+
+    setActionLoading(examId);
+    setError('');
+
+    try {
+      // 1. Önce sınavı getir
+      const { data: examData, error: examError } = await supabase
+        .from('exams')
+        .select('*')
+        .eq('id', examId)
+        .single();
+
+      if (examError) {
+        throw new Error('Sınav bilgisi alınırken bir hata oluştu: ' + examError.message);
+      }
+
+      if (!examData) {
+        throw new Error('Sınav bulunamadı');
+      }
+
+      // 2. Soruları getir
+      const { data: questionsData, error: questionsError } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('exam_id', examId);
+
+      if (questionsError) {
+        throw new Error('Sınav soruları alınırken bir hata oluştu: ' + questionsError.message);
+      }
+
+      // 3. Yeni sınav oluştur (kopyasını)
+      const newExamData = {
+        ...examData,
+        id: undefined, // id'yi undefined olarak ayarla ki Supabase yeni bir id oluştursun
+        title: `${examData.title} (Kopya)`,
+        is_active: false, // Kopyalanan sınav pasif olarak başlasın
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      delete newExamData.id; // id'yi tamamen kaldır
+
+      const { data: newExam, error: newExamError } = await supabase
+        .from('exams')
+        .insert(newExamData)
+        .select()
+        .single();
+
+      if (newExamError) {
+        throw new Error('Yeni sınav oluşturulurken bir hata oluştu: ' + newExamError.message);
+      }
+
+      // 4. Soruları kopyala
+      if (questionsData && questionsData.length > 0) {
+        const newQuestions = questionsData.map(question => {
+          const { id, ...questionWithoutId } = question;
+          return {
+            ...questionWithoutId,
+            exam_id: newExam.id
+          };
+        });
+
+        const { error: newQuestionsError } = await supabase
+          .from('questions')
+          .insert(newQuestions);
+
+        if (newQuestionsError) {
+          throw new Error('Sınav soruları kopyalanırken bir hata oluştu: ' + newQuestionsError.message);
+        }
+      }
+
+      // 5. Ekranı güncelle ve sınavlara yeni sınavı ekle
+      fetchExams(); // Sınavları yeniden yükle
+      showNotification('Sınav başarıyla kopyalandı', 'green');
+    } catch (err: any) {
+      console.error('Sınav kopyalama işlemi sırasında hata:', err);
+      setError(err.message || 'Sınav kopyalanırken beklenmeyen bir hata oluştu');
     } finally {
       setActionLoading(null);
     }
@@ -138,7 +272,6 @@ export default function Sinavlar() {
     const toast = document.createElement('div');
     toast.className = `fixed bottom-4 right-4 bg-${color}-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-500 translate-y-0 opacity-100 flex items-center`;
     
-    // Başarı ikonu ekle
     const icon = document.createElement('span');
     icon.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -147,14 +280,12 @@ export default function Sinavlar() {
     `;
     toast.appendChild(icon);
     
-    // Mesaj ekle
     const text = document.createElement('span');
     text.textContent = message;
     toast.appendChild(text);
     
     document.body.appendChild(toast);
 
-    // Toast'ı 3 saniye sonra kaldır
     setTimeout(() => {
       toast.style.opacity = '0';
       toast.style.transform = 'translateY(100%)';
@@ -162,7 +293,6 @@ export default function Sinavlar() {
     }, 3000);
   }
 
-  // Filtreleme ve arama işlemleri
   const filteredExams = exams.filter(exam => {
     const matchesSearch = exam.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || 
@@ -183,237 +313,221 @@ export default function Sinavlar() {
   }
 
   return (
-    <div>
-      {/* Başlık ve Yeni Sınav Butonu */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Sınavlar</h1>
-          <p className="text-gray-500 mt-1">Tüm sınavlarınızı yönetin ve izleyin</p>
-        </div>
-        <Link href="/panel/sinavlar/create">
-          <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center">
-            <Plus size={18} className="mr-2" />
+    <div className="p-6 bg-slate-50 min-h-screen">
+      {/* Başlık ve Üst Kısım */}
+      <div className="mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">Sınavlar</h1>
+            <p className="text-slate-500 mt-1">Tüm sınavlarınızı bu sayfadan yönetebilirsiniz</p>
+          </div>
+          <Link 
+            href="/panel/sinavlar/create"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            <Plus size={18} />
             <span>Yeni Sınav</span>
-          </button>
-        </Link>
-      </div>
+            <ArrowUpRight size={16} />
+          </Link>
+        </div>
 
-      {/* Filtreler ve Arama */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-grow">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Sınav ara..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              />
-              <div className="absolute left-3 top-2.5 text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+        {/* Filtreler ve Arama */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-grow">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Sınav ara..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                />
+                <div className="absolute left-4 top-3.5 text-slate-400">
+                  <Search className="h-5 w-5" />
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex-shrink-0">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full md:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-            >
-              <option value="all">Tüm Sınavlar</option>
-              <option value="active">Aktif Sınavlar</option>
-              <option value="inactive">Pasif Sınavlar</option>
-            </select>
+            <div className="flex gap-3">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              >
+                <option value="all">Tüm Sınavlar</option>
+                <option value="active">Aktif Sınavlar</option>
+                <option value="inactive">Pasif Sınavlar</option>
+              </select>
+              <button className="flex items-center gap-2 px-4 py-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-100">
+                <Filter size={18} />
+                <span>Filtrele</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Hata Mesajı */}
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-md">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
+          <div>
+            <h3 className="font-medium text-red-800">Hata Oluştu</h3>
+            <p className="text-red-700 text-sm mt-1">{error}</p>
           </div>
         </div>
       )}
 
-      {/* Sınavlar Tablosu */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        {filteredExams.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Sınav Adı
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
-                    Tarihler
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                    Süre
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Durum
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    İşlemler
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredExams.map((exam) => (
-                  <tr key={exam.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{exam.title}</div>
-                      <div className="text-xs text-gray-500 mt-1">{exam.department_name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap hidden md:table-cell">
-                      <div className="flex flex-col text-sm">
-                        <div className="flex items-center text-gray-700">
-                          <Calendar size={14} className="mr-1 text-green-600" />
-                          <span>Başlangıç: {formatDate(exam.start_date)}</span>
-                        </div>
-                        <div className="flex items-center text-gray-700 mt-1">
-                          <Calendar size={14} className="mr-1 text-red-600" />
-                          <span>Bitiş: {formatDate(exam.end_date)}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap hidden sm:table-cell">
-                      <div className="flex items-center text-sm text-gray-900">
-                        <Clock size={16} className="mr-2 text-blue-600" />
-                        <span>{exam.duration} dakika</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {exam.is_active ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          <span className="w-2 h-2 bg-green-500 rounded-full mr-1.5"></span>
-                          Aktif
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          <span className="w-2 h-2 bg-gray-400 rounded-full mr-1.5"></span>
-                          Pasif
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-1">
-                        {/* Başlat/Durdur Butonu */}
-                        <Tooltip content={exam.is_active ? "Sınavı Durdur" : "Sınavı Başlat"}>
-                          <button
-                            onClick={() => toggleExamStatus(exam.id, exam.is_active)}
-                            disabled={actionLoading === exam.id}
-                            className={`p-2 rounded-full ${
-                              exam.is_active 
-                                ? 'text-red-600 hover:bg-red-50' 
-                                : 'text-green-600 hover:bg-green-50'
-                            } transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                              exam.is_active ? 'focus:ring-red-500' : 'focus:ring-green-500'
-                            }`}
-                          >
-                            {actionLoading === exam.id ? (
-                              <div className="animate-spin h-5 w-5 border-2 border-t-transparent rounded-full"></div>
-                            ) : (
-                              exam.is_active ? <Pause size={18} /> : <Play size={18} />
-                            )}
-                          </button>
-                        </Tooltip>
+      {/* Sınavlar Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredExams.map((exam) => (
+          <div 
+            key={exam.id} 
+            className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow"
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <GraduationCap className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    exam.is_active 
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                      : 'bg-slate-50 text-slate-700 border border-slate-200'
+                  }`}>
+                    {exam.is_active ? 'Aktif' : 'Pasif'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleExamStatus(exam.id, exam.is_active)}
+                    disabled={actionLoading === exam.id}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      exam.is_active
+                        ? 'text-red-600 hover:bg-red-50'
+                        : 'text-emerald-600 hover:bg-emerald-50'
+                    }`}
+                    title={exam.is_active ? "Sınavı durdur" : "Sınavı başlat"}
+                  >
+                    {exam.is_active ? <Pause size={18} /> : <Play size={18} />}
+                  </button>
+                  <Link
+                    href={`/panel/sinavlar/${exam.id}/edit`}
+                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Sınavı düzenle"
+                  >
+                    <Edit size={18} />
+                  </Link>
+                  <button
+                    onClick={() => cloneExam(exam.id)}
+                    disabled={actionLoading === exam.id}
+                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Sınavın kopyasını oluştur"
+                  >
+                    <Copy size={18} />
+                  </button>
+                  <button
+                    onClick={() => deleteExam(exam.id)}
+                    disabled={actionLoading === exam.id}
+                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Sınavı sil"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
 
-                        {/* Öğrenciler Butonu */}
-                        <Tooltip content="Öğrenciler">
-                          <Link href={`/panel/sinavlar/${exam.id}/settings`}>
-                            <button
-                              className="p-2 rounded-full text-blue-600 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            >
-                              <Users size={18} />
-                            </button>
-                          </Link>
-                        </Tooltip>
+              <h3 className="text-lg font-semibold text-slate-800 mb-2 line-clamp-1">
+                {exam.title}
+              </h3>
 
-                        {/* Canlı Sonuçlar Butonu */}
-                        <Tooltip content="Canlı Sonuçlar">
-                          <Link
-                            href={`/live-results/${exam.id}`}
-                            target="_blank"
-                          >
-                            <button
-                              className="p-2 rounded-full text-purple-600 hover:bg-purple-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                            >
-                              <BarChart3 size={18} />
-                            </button>
-                          </Link>
-                        </Tooltip>
+              <div className="flex items-center text-sm text-slate-600 mb-4">
+                <Users size={16} className="mr-1.5" />
+                <span>{exam.department_name}</span>
+              </div>
 
-                        {/* Düzenle Butonu */}
-                        <Tooltip content="Düzenle">
-                          <Link href={`/exam-edit/${exam.id}`}>
-                            <button
-                              className="p-2 rounded-full text-amber-600 hover:bg-amber-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
-                            >
-                              <Edit size={18} />
-                            </button>
-                          </Link>
-                        </Tooltip>
+              <div className="space-y-2">
+                <div className="flex items-center text-sm text-slate-500">
+                  <Calendar size={16} className="mr-1.5" />
+                  <span>Başlangıç: {formatDate(exam.start_date)}</span>
+                </div>
+                <div className="flex items-center text-sm text-slate-500">
+                  <Clock size={16} className="mr-1.5" />
+                  <span>Süre: {exam.duration} dakika</span>
+                </div>
+              </div>
 
-                        {/* Sil Butonu */}
-                        <Tooltip content="Sil">
-                          <button
-                            onClick={() => deleteExam(exam.id)}
-                            disabled={actionLoading === exam.id}
-                            className="p-2 rounded-full text-red-600 hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                          >
-                            {actionLoading === exam.id ? (
-                              <div className="animate-spin h-5 w-5 border-2 border-t-transparent rounded-full"></div>
-                            ) : (
-                              <Trash2 size={18} />
-                            )}
-                          </button>
-                        </Tooltip>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="py-12 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">Sınav bulunamadı</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              {searchTerm || statusFilter !== 'all' 
-                ? 'Arama kriterleriyle eşleşen sınav bulunamadı. Filtreleri değiştirin veya yeni bir sınav oluşturun.' 
-                : 'Henüz hiç sınav oluşturmadınız. Yeni bir sınav oluşturmak için "Yeni Sınav" butonuna tıklayın.'}
-            </p>
-            <div className="mt-6">
-              <Link href="/panel/sinavlar/create">
-                <button
-                  type="button"
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <Plus className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
-                  Yeni Sınav Oluştur
-                </button>
-              </Link>
+              <div className="mt-6 pt-4 border-t border-slate-100">
+                <div className="flex gap-2">
+                  <Link
+                    href={`/panel/sinavlar/${exam.id}`}
+                    className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-slate-50 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+                  >
+                    <span>Detayları Görüntüle</span>
+                    <ExternalLink size={16} />
+                  </Link>
+                  <Link
+                    href={`/panel/sinavlar/${exam.id}/edit?tab=students`}
+                    className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors"
+                  >
+                    <Users size={16} />
+                    <span>Öğrenci Ata</span>
+                  </Link>
+                </div>
+                {exam.is_active && (
+                  <div className="mt-3 flex flex-col gap-2">
+                    <Link
+                      href="/exam-login"
+                      target="_blank"
+                      className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors"
+                    >
+                      <Play size={16} />
+                      <span>Sınav Giriş Sayfası</span>
+                      <ExternalLink size={14} />
+                    </Link>
+                    <Link
+                      href={`/live-results/${exam.id}`}
+                      target="_blank"
+                      className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                    >
+                      <BarChart3 size={16} />
+                      <span>Canlı Sonuçları Takip Et</span>
+                      <ExternalLink size={14} />
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        )}
+        ))}
       </div>
+
+      {/* Boş Durum */}
+      {filteredExams.length === 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="p-3 bg-slate-100 rounded-full">
+              <AlertCircle className="w-8 h-8 text-slate-400" />
+            </div>
+          </div>
+          <h3 className="text-lg font-medium text-slate-800 mb-2">
+            Sınav Bulunamadı
+          </h3>
+          <p className="text-slate-500 mb-6">
+            {searchTerm 
+              ? 'Arama kriterlerinize uygun sınav bulunamadı.' 
+              : 'Henüz hiç sınav oluşturulmamış.'}
+          </p>
+          <Link
+            href="/panel/sinavlar/create"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={18} />
+            <span>Yeni Sınav Oluştur</span>
+          </Link>
+        </div>
+      )}
     </div>
-  )
+  );
 }

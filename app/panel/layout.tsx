@@ -12,7 +12,8 @@ import {
   Settings, 
   Menu, 
   LogOut, 
-  X 
+  X,
+  GraduationCap
 } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
@@ -190,11 +191,18 @@ export default function PanelLayout({
                   isActive={pathname === '/panel/ogrenciler'}
                 />
                 <SubNavItem 
-                  href="/panel/ogrenciler/create" 
+                  href="/panel/ogrenciler/ekle" 
                   title="Yeni Öğrenci" 
-                  isActive={pathname === '/panel/ogrenciler/create'}
+                  isActive={pathname === '/panel/ogrenciler/ekle'}
                 />
               </NavItem>
+
+              <NavItem 
+                href="/panel/bolumler" 
+                icon={<GraduationCap size={20} />}
+                title="Bölümler"
+                isActive={pathname === '/panel/bolumler'}
+              />
               
               <NavItem 
                 href="/panel/ayarlar" 

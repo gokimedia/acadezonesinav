@@ -8,11 +8,14 @@ import {
   BookOpen, 
   Users, 
   Clock, 
-  ArrowUp, 
-  ArrowDown, 
+  ArrowUpRight,
   CheckCircle,
-  PauseCircle,
-  ExternalLink
+  BookOpenCheck,
+  UserRoundCheck,
+  GraduationCap,
+  Activity,
+  ExternalLink,
+  Filter
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -24,6 +27,8 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  AreaChart,
+  Area
 } from 'recharts';
 
 interface DashboardStats {
@@ -232,84 +237,92 @@ export default function PanelPage() {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Sayfa Başlığı */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Yönetim Paneli</h1>
-        <Link 
-          href="/panel/sinavlar/create"
-          className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-        >
-          <span>Yeni Sınav Oluştur</span>
-        </Link>
-      </div>
-
-      {/* Ana İstatistikler */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Toplam Sınav</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.totalExams}</p>
-              </div>
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <BookOpen className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-            <div className="mt-4 text-sm text-gray-500">
-              Sistemdeki toplam sınav sayısı
-            </div>
+    <div className="p-6 bg-slate-50 min-h-screen">
+      {/* Başlık ve Üst Kısım */}
+      <div className="mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">Acadezone Yönetim Paneli</h1>
+            <p className="text-slate-500 mt-1">Sınav sistemini bu panel üzerinden yönetebilirsiniz</p>
+          </div>
+          <div className="flex gap-3">
+            <button className="flex items-center gap-2 px-4 py-2 bg-white text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50">
+              <Filter size={16} />
+              <span>Filtrele</span>
+            </button>
+            <Link 
+              href="/panel/sinavlar/create"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              <span>Yeni Sınav</span>
+              <ArrowUpRight size={16} />
+            </Link>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Aktif Sınav</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.activeExams}</p>
+        {/* Ana İstatistikler */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 shadow-sm border border-blue-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-blue-500 text-white rounded-lg shadow-md">
+                <BookOpenCheck className="h-6 w-6" />
               </div>
-              <div className="bg-green-100 p-3 rounded-lg">
-                <Clock className="h-6 w-6 text-green-600" />
-              </div>
+              <span className="text-blue-600 text-sm font-medium bg-blue-100 px-2 py-1 rounded-full">Toplam</span>
             </div>
-            <div className="mt-4 text-sm text-gray-500">
-              Şu anda aktif olan sınav sayısı
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Toplam Öğrenci</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.totalStudents}</p>
-              </div>
-              <div className="bg-amber-100 p-3 rounded-lg">
-                <Users className="h-6 w-6 text-amber-600" />
-              </div>
-            </div>
-            <div className="mt-4 text-sm text-gray-500">
-              Kayıtlı öğrenci sayısı
+            <h3 className="text-4xl font-bold text-slate-800">{stats.totalExams}</h3>
+            <p className="mt-1 text-slate-600">Toplam Sınav</p>
+            <div className="mt-4 pt-4 border-t border-blue-200">
+              <Link href="/panel/sinavlar" className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center">
+                Tüm sınavları görüntüle <ArrowUpRight className="ml-1 h-3 w-3" />
+              </Link>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Ortalama Puan</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.averageScore}</p>
+          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-6 shadow-sm border border-emerald-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-emerald-500 text-white rounded-lg shadow-md">
+                <Activity className="h-6 w-6" />
               </div>
-              <div className="bg-red-100 p-3 rounded-lg">
-                <BarChart3 className="h-6 w-6 text-red-600" />
-              </div>
+              <span className="text-emerald-600 text-sm font-medium bg-emerald-100 px-2 py-1 rounded-full">Aktif</span>
             </div>
-            <div className="mt-4 text-sm text-gray-500">
-              Tüm sınavların ortalama puanı
+            <h3 className="text-4xl font-bold text-slate-800">{stats.activeExams}</h3>
+            <p className="mt-1 text-slate-600">Aktif Sınav</p>
+            <div className="mt-4 pt-4 border-t border-emerald-200">
+              <Link href="/panel/canli-sonuclar" className="text-emerald-600 hover:text-emerald-700 text-sm font-medium flex items-center">
+                Canlı sonuçları görüntüle <ArrowUpRight className="ml-1 h-3 w-3" />
+              </Link>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-6 shadow-sm border border-amber-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-amber-500 text-white rounded-lg shadow-md">
+                <UserRoundCheck className="h-6 w-6" />
+              </div>
+              <span className="text-amber-600 text-sm font-medium bg-amber-100 px-2 py-1 rounded-full">Kayıtlı</span>
+            </div>
+            <h3 className="text-4xl font-bold text-slate-800">{stats.totalStudents}</h3>
+            <p className="mt-1 text-slate-600">Toplam Öğrenci</p>
+            <div className="mt-4 pt-4 border-t border-amber-200">
+              <Link href="/panel/ogrenciler" className="text-amber-600 hover:text-amber-700 text-sm font-medium flex items-center">
+                Tüm öğrencileri görüntüle <ArrowUpRight className="ml-1 h-3 w-3" />
+              </Link>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-rose-50 to-rose-100 rounded-xl p-6 shadow-sm border border-rose-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-rose-500 text-white rounded-lg shadow-md">
+                <GraduationCap className="h-6 w-6" />
+              </div>
+              <span className="text-rose-600 text-sm font-medium bg-rose-100 px-2 py-1 rounded-full">Ortalama</span>
+            </div>
+            <h3 className="text-4xl font-bold text-slate-800">{stats.averageScore}</h3>
+            <p className="mt-1 text-slate-600">Ortalama Puan</p>
+            <div className="mt-4 pt-4 border-t border-rose-200">
+              <Link href="/panel/sonuclar" className="text-rose-600 hover:text-rose-700 text-sm font-medium flex items-center">
+                Tüm sonuçları görüntüle <ArrowUpRight className="ml-1 h-3 w-3" />
+              </Link>
             </div>
           </div>
         </div>
@@ -318,41 +331,47 @@ export default function PanelPage() {
       {/* Grafik ve Son Sınavlar */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Grafik */}
-        <div className="lg:col-span-2 bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100">
-          <div className="px-6 py-5 border-b border-gray-100">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Son Sınavların Ortalamaları
-            </h2>
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-6 border-b border-slate-100">
+            <h2 className="text-xl font-bold text-slate-800">Sınav Sonuç Analizi</h2>
+            <p className="text-slate-500 text-sm mt-1">Son 5 sınavın ortalama sonuç değerleri</p>
           </div>
           <div className="p-6">
             {examStats.length > 0 ? (
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={examStats}>
+                  <AreaChart data={examStats}>
+                    <defs>
+                      <linearGradient id="colorUv" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="name" tick={{ fill: '#6b7280' }} />
-                    <YAxis tick={{ fill: '#6b7280' }} domain={[0, 100]} />
+                    <XAxis dataKey="name" tick={{ fill: '#64748b' }} />
+                    <YAxis tick={{ fill: '#64748b' }} domain={[0, 100]} />
                     <Tooltip 
                       contentStyle={{ 
                         backgroundColor: '#fff', 
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '6px',
-                        boxShadow: '0 2px 5px rgba(0, 0, 0, 0.05)'
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
                       }} 
                     />
-                    <Bar
+                    <Area
+                      type="monotone"
                       name="Ortalama Puan"
                       dataKey="ortalama"
-                      fill="#3b82f6"
-                      radius={[4, 4, 0, 0]}
-                      barSize={40}
+                      stroke="#3b82f6"
+                      fillOpacity={1}
+                      fill="url(#colorUv)"
                     />
-                  </BarChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             ) : (
               <div className="h-80 flex items-center justify-center">
-                <p className="text-gray-500 text-center">
+                <p className="text-slate-500 text-center">
                   Henüz yeterli sınav verisi bulunmamaktadır.
                 </p>
               </div>
@@ -361,66 +380,59 @@ export default function PanelPage() {
         </div>
 
         {/* Son Sınavlar */}
-        <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100">
-          <div className="px-6 py-5 border-b border-gray-100">
-            <h2 className="text-lg font-semibold text-gray-900">Son Sınavlar</h2>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-6 border-b border-slate-100">
+            <h2 className="text-xl font-bold text-slate-800">Son Sınavlar</h2>
+            <p className="text-slate-500 text-sm mt-1">En son oluşturulan 4 sınav</p>
           </div>
-          <div className="divide-y divide-gray-100">
+          
+          <div className="divide-y divide-slate-100">
             {recentExams.length > 0 ? (
               recentExams.map((exam) => (
-                <div key={exam.id} className="p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-sm font-medium text-gray-900 truncate">
-                        {exam.title}
-                      </h3>
-                      <div className="mt-1 flex items-center">
-                        <span className="text-xs text-gray-500 mr-3">
-                          {formatDate(exam.date)}
-                        </span>
-                        <span className="text-xs text-gray-500 flex items-center">
-                          <Users size={12} className="mr-1" />{exam.studentCount} öğrenci
-                        </span>
-                      </div>
+                <div key={exam.id} className="p-4 hover:bg-slate-50">
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="font-medium text-slate-800 truncate">{exam.title}</h3>
+                    <span className={`text-xs px-2 py-1 rounded-full ${exam.isActive ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'}`}>
+                      {exam.isActive ? 'Aktif' : 'Pasif'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-x-6 text-sm text-slate-500 mt-2">
+                    <div className="flex items-center">
+                      <Clock className="w-4 h-4 mr-1 text-slate-400" />
+                      <span>{formatDate(exam.date)}</span>
                     </div>
-                    <div className="ml-4 flex-shrink-0 flex items-center space-x-2">
-                      {exam.isActive ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          <CheckCircle size={12} className="mr-1" />
-                          Aktif
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          <PauseCircle size={12} className="mr-1" />
-                          Pasif
-                        </span>
-                      )}
-                      <Link
-                        href={`/exam-edit/${exam.id}`}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <ExternalLink size={16} />
-                      </Link>
+                    <div className="flex items-center">
+                      <Users className="w-4 h-4 mr-1 text-slate-400" />
+                      <span>{exam.studentCount} öğrenci</span>
                     </div>
+                  </div>
+                  <div className="mt-3">
+                    <Link 
+                      href={`/panel/sinavlar/${exam.id}`}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
+                    >
+                      Detayları Görüntüle
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </Link>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="p-8 text-center text-gray-500">
-                Henüz sınav bulunmamaktadır.
+              <div className="p-6 text-center text-slate-500">
+                Henüz sınav oluşturulmamış.
               </div>
             )}
           </div>
-          {recentExams.length > 0 && (
-            <div className="p-4 bg-gray-50 border-t border-gray-100">
-              <Link
-                href="/panel/sinavlar"
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium flex justify-center"
-              >
-                Tüm Sınavları Görüntüle
-              </Link>
-            </div>
-          )}
+          
+          <div className="p-4 bg-slate-50 border-t border-slate-100">
+            <Link 
+              href="/panel/sinavlar"
+              className="w-full flex justify-center items-center text-sm text-slate-700 font-medium hover:text-slate-900"
+            >
+              Tüm Sınavları Görüntüle
+              <ArrowUpRight className="ml-1 h-4 w-4" />
+            </Link>
+          </div>
         </div>
       </div>
     </div>
