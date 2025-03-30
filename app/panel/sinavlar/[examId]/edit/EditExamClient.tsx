@@ -3,7 +3,23 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Exam, Question } from '@/types/database';
+
+// Tür tanımlarını doğrudan burada yapıyoruz
+interface Question {
+  id: string;
+  exam_id: string;
+  content: string;
+  order: number;
+}
+
+interface Exam {
+  id: string;
+  title: string;
+  description: string;
+  duration: number;
+  start_time: string;
+  end_time: string;
+}
 
 export default function EditExamClient({ examId }: { examId: string }) {
   const router = useRouter();
