@@ -48,8 +48,6 @@ export default function ExamLogin() {
     setError(null)
 
     try {
-      console.log('Aranan öğrenci kodu:', studentCode.trim())
-      
       // İlk olarak exam_students tablosunda bu kodu arayalım
       const { data: examStudentsData, error: examStudentError } = await supabase
         .from('exam_students')
@@ -74,12 +72,8 @@ export default function ExamLogin() {
         .eq('student_code', studentCode.trim())
         .single()
 
-      console.log('Sorgu sonucu:', { examStudentsData, examStudentError })
-
-      // Hata kontrollerini iyileştirelim ve daha anlamlı hata mesajları gösterelim
+      // Hata kontrolü
       if (examStudentError) {
-        console.error('Exam student error:', examStudentError)
-        
         // Hata kodlarına göre özel mesajlar gösterelim
         if (examStudentError.code === 'PGRST116') {
           // PGRST116: No rows returned (veri bulunamadı)
@@ -113,9 +107,6 @@ export default function ExamLogin() {
         setError('Bu sınavın süresi dolmuş. Artık giriş yapamazsınız.')
         return
       }
-      
-      // Öğrenci bilgilerini göster
-      console.log('Öğrenci:', typedExamStudentData.student.name, typedExamStudentData.student.surname)
 
       // Sınav token'ını cookie'ye kaydet
       const tokenData = {
@@ -135,8 +126,8 @@ export default function ExamLogin() {
       router.push(`/exam/${typedExamStudentData.exam_id}`)
 
     } catch (error: any) {
-      console.error('Login error:', error)
-      setError(`Giriş yapılırken bir hata oluştu: ${error.message || 'Bilinmeyen bir hata'}`)
+      // Genel hata mesajı gösterilir, detaylar konsola yazılmaz
+      setError('Giriş yapılırken bir hata oluştu. Lütfen daha sonra tekrar deneyin.')
     } finally {
       setLoading(false)
     }
