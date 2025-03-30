@@ -22,6 +22,7 @@ interface Question {
   correct_answer: string;
   points: number;
   question_type: string;
+  [key: string]: string | number;
 }
 
 interface Exam {
