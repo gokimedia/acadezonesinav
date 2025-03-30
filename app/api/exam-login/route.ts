@@ -2,6 +2,13 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
+// Tip tanımlarını daha esnek hale getirelim
+interface ExamData {
+  id: any;
+  title: any;
+  is_active: boolean;
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
@@ -16,7 +23,8 @@ export async function POST(request: Request) {
 
     const supabase = createRouteHandlerClient({ cookies })
 
-    const { data: examStudentData, error: examStudentError } = await supabase
+    // İlişkisel veriyi olduğu gibi kabul ediyoruz
+    const { data, error: examStudentError } = await supabase
       .from('exam_students')
       .select(`
         id,
@@ -40,7 +48,26 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!examStudentData.exam.is_active) {
+    // Veri kontrolü
+    if (!data || !data.exam) {
+      return NextResponse.json(
+        { error: 'Sınav bilgisi bulunamadı' },
+        { status: 404 }
+      )
+    }
+
+    // Sınav aktifliğini kontrol edelim
+    // any tipini kullanarak TypeScript tip kontrolünü geçici olarak atlayalım
+    const examData: any = data.exam;
+    let isExamActive = false;
+    
+    if (Array.isArray(examData)) {
+      isExamActive = examData.length > 0 ? Boolean(examData[0].is_active) : false;
+    } else {
+      isExamActive = Boolean(examData.is_active);
+    }
+
+    if (!isExamActive) {
       return NextResponse.json(
         { error: 'Bu sınav henüz aktif değil' },
         { status: 403 }
@@ -49,13 +76,13 @@ export async function POST(request: Request) {
 
     // Sınav token'ını cookie'ye kaydet
     const token = btoa(JSON.stringify({
-      examId: examStudentData.exam_id,
-      studentId: examStudentData.student_id,
-      studentCode: examStudentData.student_code
+      examId: data.exam_id,
+      studentId: data.student_id,
+      studentCode: data.student_code
     }))
 
     // Cookie'yi ayarla
-    const response = NextResponse.redirect(`/exam/${examStudentData.exam_id}`)
+    const response = NextResponse.redirect(`/exam/${data.exam_id}`)
     response.cookies.set('exam_token', token, {
       path: '/',
       httpOnly: true,
