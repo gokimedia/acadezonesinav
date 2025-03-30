@@ -76,9 +76,26 @@ export default function ExamLogin() {
 
       console.log('Sorgu sonucu:', { examStudentsData, examStudentError })
 
-      if (examStudentError || !examStudentsData) {
-        // Eğer exam_students'da bulunamazsa, belki öğrenci henüz bir sınava atanmamıştır
+      // Hata kontrollerini iyileştirelim ve daha anlamlı hata mesajları gösterelim
+      if (examStudentError) {
         console.error('Exam student error:', examStudentError)
+        
+        // Hata kodlarına göre özel mesajlar gösterelim
+        if (examStudentError.code === 'PGRST116') {
+          // PGRST116: No rows returned (veri bulunamadı)
+          setError('Girdiğiniz öğrenci numarası sistemde bulunamadı. Lütfen kodu kontrol edin veya sınav yöneticinize başvurun.')
+        } else if (examStudentError.code === 'PGRST104') {
+          // Syntax hatası
+          setError('Girdiğiniz kodda geçersiz karakterler var. Lütfen doğru formatı kullanın.')
+        } else {
+          // Diğer hatalar
+          setError(`Sınav kaydı aranırken bir hata oluştu: ${examStudentError.message || 'Bilinmeyen hata'}`)
+        }
+        
+        return
+      }
+      
+      if (!examStudentsData) {
         setError('Girdiğiniz kod ile eşleşen bir sınav kaydı bulunamadı. Lütfen kodu kontrol edin veya sınav yöneticinize başvurun.')
         return
       }
@@ -117,9 +134,9 @@ export default function ExamLogin() {
       // Sınav sayfasına yönlendir
       router.push(`/exam/${typedExamStudentData.exam_id}`)
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error)
-      setError('Giriş yapılırken bir hata oluştu. Lütfen daha sonra tekrar deneyin.')
+      setError(`Giriş yapılırken bir hata oluştu: ${error.message || 'Bilinmeyen bir hata'}`)
     } finally {
       setLoading(false)
     }
