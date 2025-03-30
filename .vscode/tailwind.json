@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "atDirectives": [
+    {
+      "name": "@tailwind",
+      "description": "Tailwind CSS'in temel kategorilerini ekler: base, components, utilities, screens"
+    },
+    {
+      "name": "@apply",
+      "description": "CSS içinde Tailwind sınıflarını inline olarak kullanmayı sağlar"
+    },
+    {
+      "name": "@layer",
+      "description": "Tailwind CSS katmanlarını tanımlar: base, components, utilities"
+    },
+    {
+      "name": "@variants",
+      "description": "Tailwind varyantları tanımlar: responsive, hover, focus, vs."
+    },
+    {
+      "name": "@responsive",
+      "description": "Responsive tasarım için varyant tanımlar"
+    },
+    {
+      "name": "@screen",
+      "description": "Tailwind ekran boyutlarına göre medya sorguları oluşturur"
+    }
+  ]
+} 
