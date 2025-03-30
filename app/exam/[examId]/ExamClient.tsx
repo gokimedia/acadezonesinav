@@ -150,6 +150,24 @@ export default function ExamClient({ examId, examData, studentData }: Props) {
     const initializeExam = async () => {
       try {
         await loadExistingAnswers();
+        
+        // LocalStorage'dan daha önce kaydedilmiş başlangıç zamanını kontrol et
+        const storageKey = `exam_${examData.id}_student_${studentData.students.id}_start_time`;
+        const savedStartTime = localStorage.getItem(storageKey);
+        
+        if (savedStartTime) {
+          // Eğer başlangıç zamanı kaydedilmişse, kalan süreyi hesapla
+          const startTime = parseInt(savedStartTime, 10);
+          const currentTime = new Date().getTime();
+          const elapsedSeconds = Math.floor((currentTime - startTime) / 1000);
+          const remainingSeconds = Math.max(0, examData.duration * 60 - elapsedSeconds);
+          setTimeLeft(remainingSeconds);
+        } else {
+          // Eğer başlangıç zamanı yoksa, şimdi kaydet
+          const now = new Date().getTime();
+          localStorage.setItem(storageKey, now.toString());
+        }
+        
         setHasStarted(examData.is_active);
         setIsExamActive(examData.is_active);
       } catch (err) {
@@ -161,7 +179,7 @@ export default function ExamClient({ examId, examData, studentData }: Props) {
     };
 
     initializeExam();
-  }, [examData?.id, examData?.is_active, loadExistingAnswers, isDataReady]);
+  }, [examData?.id, examData?.is_active, examData?.duration, loadExistingAnswers, isDataReady, studentData?.students?.id]);
 
   // Süre sayacı
   useEffect(() => {
