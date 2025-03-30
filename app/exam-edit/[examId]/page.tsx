@@ -27,7 +27,7 @@ export default function ExamEditPage() {
         <p className="ml-3 text-gray-600">Yükleniyor...</p>
       </div>
     }>
-      <ExamEditClient examId={examId} />
+      <ExamEditClient />
     </Suspense>
   );
 }
