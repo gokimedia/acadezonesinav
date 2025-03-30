@@ -102,10 +102,10 @@ export default function ExamStudentsPage({ params }: { params: Promise<{ examId:
           id: es.id,
           exam_id: examId,
           student_id: es.student_id,
-          student: es.students
+          student: Array.isArray(es.students) ? es.students[0] : es.students
         }));
 
-      setExamStudents(formattedData);
+      setExamStudents(formattedData as ExamStudent[]);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Beklenmeyen bir hata oluştu';
       console.error('Öğrenciler yüklenirken hata:', errorMessage);
@@ -166,9 +166,9 @@ export default function ExamStudentsPage({ params }: { params: Promise<{ examId:
           id: data.id,
           exam_id: examId,
           student_id: data.student_id,
-          student: data.students
+          student: Array.isArray(data.students) ? data.students[0] : data.students
         };
-        setExamStudents([...examStudents, newExamStudent]);
+        setExamStudents([...examStudents, newExamStudent as ExamStudent]);
         setSelectedStudent('');
         setError(null);
       }
