@@ -151,21 +151,54 @@ export default function ExamClient({ examId, examData, studentData }: Props) {
       try {
         await loadExistingAnswers();
         
-        // LocalStorage'dan daha önce kaydedilmiş başlangıç zamanını kontrol et
+        // Başlangıç zamanını kontrol et (önce sessionStorage, sonra localStorage)
         const storageKey = `exam_${examData.id}_student_${studentData.students.id}_start_time`;
-        const savedStartTime = localStorage.getItem(storageKey);
         
-        if (savedStartTime) {
-          // Eğer başlangıç zamanı kaydedilmişse, kalan süreyi hesapla
-          const startTime = parseInt(savedStartTime, 10);
-          const currentTime = new Date().getTime();
-          const elapsedSeconds = Math.floor((currentTime - startTime) / 1000);
-          const remainingSeconds = Math.max(0, examData.duration * 60 - elapsedSeconds);
-          setTimeLeft(remainingSeconds);
-        } else {
-          // Eğer başlangıç zamanı yoksa, şimdi kaydet
-          const now = new Date().getTime();
-          localStorage.setItem(storageKey, now.toString());
+        // Hata durumlarına karşı try-catch bloğu ekle
+        try {
+          // Önce sessionStorage'da kontrol et (tarayıcı oturumu için)
+          let savedStartTime = sessionStorage.getItem(storageKey);
+          
+          // sessionStorage'da yoksa localStorage'ı kontrol et
+          if (!savedStartTime) {
+            savedStartTime = localStorage.getItem(storageKey);
+          }
+          
+          if (savedStartTime) {
+            // Eğer başlangıç zamanı kaydedilmişse, kalan süreyi hesapla
+            const startTime = parseInt(savedStartTime, 10);
+            const currentTime = new Date().getTime();
+            const elapsedSeconds = Math.floor((currentTime - startTime) / 1000);
+            const remainingSeconds = Math.max(0, examData.duration * 60 - elapsedSeconds);
+            
+            console.log('Sınav bilgileri:', {
+              startTime,
+              currentTime,
+              elapsedSeconds,
+              remainingSeconds,
+              duration: examData.duration
+            });
+            
+            setTimeLeft(remainingSeconds);
+          } else {
+            // Eğer başlangıç zamanı yoksa, şimdi kaydet
+            const now = new Date().getTime();
+            console.log('Yeni sınav başlangıç zamanı kaydediliyor:', now);
+            
+            // Her iki storage'a da kaydet (redundancy için)
+            try {
+              localStorage.setItem(storageKey, now.toString());
+              sessionStorage.setItem(storageKey, now.toString());
+            } catch (storageError) {
+              console.error('Storage kayıt hatası:', storageError);
+              // localStorage hata verirse sadece session'a kaydet
+              sessionStorage.setItem(storageKey, now.toString());
+            }
+          }
+        } catch (storageError) {
+          console.error('Storage erişim hatası:', storageError);
+          // Depolama erişim hatası - başlangıç süresi yok sayılıyor
+          setError('Tarayıcı depolama alanına erişim hatası. Sınav süresi tam olarak çalışmayabilir.');
         }
         
         setHasStarted(examData.is_active);
