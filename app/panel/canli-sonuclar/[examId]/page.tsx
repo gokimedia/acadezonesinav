@@ -82,7 +82,7 @@ export default function LiveResults() {
       // Aktif öğrenci sayısı (en az bir soruyu cevaplayan)
       const { count: activeStudents } = await supabase
         .from('answers')
-        .select('student_id', { count: 'exact', distinct: true })
+        .select('student_id', { head: true, count: 'exact' })
         .eq('exam_id', examId)
 
       // Doğru/Yanlış oranları
