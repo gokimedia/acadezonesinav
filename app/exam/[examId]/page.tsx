@@ -113,109 +113,44 @@ export default async function ExamPage({
       cookies,
     });
 
-    // Sınav ve öğrenci bilgilerini tek sorguda al
-    const { data: examStudentData, error: examStudentError } = await supabase
-      .from('exam_students')
+    // Sınav ve öğrenci bilgilerini tek sorguda al - bu sefer farklı bir yaklaşım deneyelim
+    console.log("Sınav verilerini getirmeye çalışıyorum...");
+    console.log("Parametre examId:", params.examId);
+    console.log("Token verisi:", tokenData);
+    
+    // Önce doğrudan sınav ID ile sorgu yapalım
+    const { data: examData, error: examError } = await supabase
+      .from('exams')
       .select(`
         id,
-        student_id,
-        exam_id,
-        students (
+        title,
+        description,
+        duration,
+        is_active,
+        passing_grade,
+        questions (
           id,
-          name,
-          surname,
-          phone
-        ),
-        exams (
-          id,
-          title,
-          description,
-          duration,
-          is_active,
-          passing_grade,
-          questions (
-            id,
-            question_text,
-            option_a,
-            option_b,
-            option_c,
-            option_d,
-            correct_answer,
-            points,
-            question_type
-          )
+          question_text,
+          option_a,
+          option_b,
+          option_c,
+          option_d,
+          correct_answer,
+          points,
+          question_type
         )
       `)
-      .eq('student_id', tokenData.studentId)
-      .eq('exam_id', params.examId)
+      .eq('id', params.examId)
       .single();
-
-    // Hata loglaması ekleyelim
-    console.log("Sınav ID:", params.examId);
-    console.log("Öğrenci ID:", tokenData.studentId);
-    console.log("Token'daki sınav ID:", tokenData.examId);
-    console.log("Sorgu sonucu:", examStudentData);
-    console.log("Sorgu hatası:", examStudentError);
-
-    if (examStudentError) {
-      console.error('Sınav bilgileri alınamadı:', examStudentError);
       
-      // URL'deki sınav ID'si ile token'daki sınav ID'si farklıysa alternatif sorgu yap
-      if (params.examId !== tokenData.examId) {
-        console.log("URL ve token'daki sınav ID'leri farklı, alternatif sorgu yapılıyor");
-        
-        const { data: altExamStudentData, error: altExamStudentError } = await supabase
-          .from('exam_students')
-          .select(`
-            id,
-            student_id,
-            exam_id,
-            students (
-              id,
-              name,
-              surname,
-              phone
-            ),
-            exams (
-              id,
-              title,
-              description,
-              duration,
-              is_active,
-              passing_grade,
-              questions (
-                id,
-                question_text,
-                option_a,
-                option_b,
-                option_c,
-                option_d,
-                correct_answer,
-                points,
-                question_type
-              )
-            )
-          `)
-          .eq('student_id', tokenData.studentId)
-          .eq('exam_id', tokenData.examId) // Token'dan alınan exam ID'sini kullan
-          .single();
-          
-        // Alternatif sorgu başarılıysa onu kullan
-        if (!altExamStudentError && altExamStudentData) {
-          console.log("Alternatif sorgu başarılı:", altExamStudentData);
-          return processExamData(altExamStudentData, params.examId);
-        }
-      }
-      
+    if (examError) {
+      console.error("Sınav bilgisi alınırken hata:", examError);
       return (
         <div className="text-red-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
           <div className="bg-red-700 text-white p-6 rounded-lg max-w-md">
             <h2 className="text-xl font-bold mb-4">Sınav bilgileri alınamadı</h2>
             <p className="mb-4">Lütfen daha sonra tekrar deneyin veya yöneticinizle iletişime geçin.</p>
-            <p className="text-sm opacity-75">Hata: {examStudentError.message}</p>
-            <p className="text-sm opacity-75 mt-2">Sınav ID: {params.examId}</p>
-            <p className="text-sm opacity-75">Token Sınav ID: {tokenData.examId}</p>
-            <p className="text-sm opacity-75">Öğrenci ID: {tokenData.studentId}</p>
+            <p className="text-sm opacity-75">Hata: {examError.message}</p>
             <ClientButton 
               href="/exam-login" 
               className="mt-4 bg-white text-red-700 px-4 py-2 rounded hover:bg-gray-100"
@@ -226,12 +161,14 @@ export default async function ExamPage({
         </div>
       );
     }
-
-    if (!examStudentData || !examStudentData.exams || !examStudentData.students) {
+    
+    if (!examData) {
+      console.error("Sınav bulunamadı");
       return (
         <div className="text-red-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
           <div className="bg-red-700 text-white p-6 rounded-lg max-w-md">
-            <h2 className="text-xl font-bold mb-4">Bu sınava kaydınız bulunmamaktadır</h2>
+            <h2 className="text-xl font-bold mb-4">Sınav bulunamadı</h2>
+            <p className="mb-4">Bu sınav ID'si ile eşleşen bir sınav bulunamadı.</p>
             <ClientButton 
               href="/exam-login" 
               className="mt-4 bg-white text-red-700 px-4 py-2 rounded hover:bg-gray-100"
@@ -242,87 +179,58 @@ export default async function ExamPage({
         </div>
       );
     }
-
-    // examStudentData.exams bir dizi olduğu için ilk elemanını alıyoruz
-    if (Array.isArray(examStudentData.exams) && examStudentData.exams.length > 0) {
-      const examData = examStudentData.exams[0];
+    
+    // Şimdi öğrenci bilgilerini alalım
+    const { data: studentData, error: studentError } = await supabase
+      .from('exam_students')
+      .select(`
+        id,
+        student_id,
+        students (
+          id,
+          name, 
+          surname,
+          phone
+        )
+      `)
+      .eq('exam_id', params.examId)
+      .eq('student_code', tokenData.studentCode)
+      .single();
       
-      // Sınav aktif değilse
-      if (!examData.is_active) {
-        return (
-          <div className="text-yellow-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
-            <div className="bg-yellow-700 text-white p-6 rounded-lg max-w-md">
-              <h2 className="text-xl font-bold mb-4">Bu sınav aktif değil</h2>
-              <p className="mb-4">Sınav yönetici tarafından durdurulmuş olabilir. Lütfen yöneticinizle iletişime geçin.</p>
-              <ClientButton 
-                href="/exam-login" 
-                className="mt-4 bg-white text-yellow-700 px-4 py-2 rounded hover:bg-gray-100"
-              >
-                Giriş Sayfasına Dön
-              </ClientButton>
-            </div>
-          </div>
-        );
+    if (studentError) {
+      console.error("Öğrenci bilgisi alınırken hata:", studentError);
+      
+      // Alternatif olarak student_id ile deneyelim
+      console.log("Student_id ile sorgu yapılıyor:", tokenData.studentId);
+      const { data: altStudentData, error: altStudentError } = await supabase
+        .from('exam_students')
+        .select(`
+          id,
+          student_id,
+          students (
+            id,
+            name, 
+            surname,
+            phone
+          )
+        `)
+        .eq('exam_id', params.examId)
+        .eq('student_id', tokenData.studentId)
+        .single();
+        
+      if (!altStudentError && altStudentData) {
+        console.log("Alternatif sorgu başarılı:", altStudentData);
+        return processAndRenderExam(examData, altStudentData, examId);
       }
       
-      // Supabase'den gelen veriyi ExamClient bileşenine uygun şekilde dönüştür
-      // as unknown as T şeklinde tip dönüşümü yapmak daha güvenlidir
-      
-      // Soru verilerini dönüştür ve indeks imzası ekle
-      const processedQuestions: Question[] = examData.questions.map((q: any) => ({
-        id: q.id,
-        question_text: q.question_text,
-        option_a: q.option_a,
-        option_b: q.option_b,
-        option_c: q.option_c,
-        option_d: q.option_d,
-        correct_answer: q.correct_answer,
-        points: q.points,
-        question_type: q.question_type
-      }));
-      
-      // Sınav verilerini düzenle
-      const processedExamData: Exam = {
-        id: examData.id,
-        title: examData.title,
-        description: examData.description,
-        duration: examData.duration,
-        is_active: examData.is_active,
-        passing_grade: examData.passing_grade,
-        questions: processedQuestions
-      };
-      
-      // Öğrenci verisi için bir dizi değil tek bir öğrenciye ihtiyaç var
-      const student = Array.isArray(examStudentData.students) 
-        ? examStudentData.students[0] 
-        : examStudentData.students;
-      
-      // Öğrenci verilerini düzenle  
-      const processedStudentData: ExamStudentData = {
-        id: examStudentData.id,
-        student_id: examStudentData.student_id,
-        exam_id: examStudentData.exam_id,
-        students: {
-          id: student.id,
-          name: student.name,
-          surname: student.surname,
-          phone: student.phone
-        }
-      };
-
-      // Sınav verilerini Client component'e aktar
-      return (
-        <ExamClient 
-          examId={examId}
-          examData={processedExamData} 
-          studentData={processedStudentData}
-        />
-      );
-    } else {
       return (
         <div className="text-red-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
           <div className="bg-red-700 text-white p-6 rounded-lg max-w-md">
-            <h2 className="text-xl font-bold mb-4">Sınav bilgileri bulunamadı</h2>
+            <h2 className="text-xl font-bold mb-4">Öğrenci kaydı bulunamadı</h2>
+            <p className="mb-4">Bu sınava kayıtlı öğrenci bilgisi bulunamadı.</p>
+            <p className="text-sm opacity-75">Hata: {studentError.message}</p>
+            <p className="text-sm opacity-75 mt-2">Sınav ID: {params.examId}</p>
+            <p className="text-sm opacity-75">Token Öğrenci Kodu: {tokenData.studentCode}</p>
             <ClientButton 
               href="/exam-login" 
               className="mt-4 bg-white text-red-700 px-4 py-2 rounded hover:bg-gray-100"
@@ -333,6 +241,27 @@ export default async function ExamPage({
         </div>
       );
     }
+    
+    if (!studentData) {
+      console.error("Öğrenci kaydı bulunamadı");
+      return (
+        <div className="text-red-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
+          <div className="bg-red-700 text-white p-6 rounded-lg max-w-md">
+            <h2 className="text-xl font-bold mb-4">Öğrenci kaydı bulunamadı</h2>
+            <p className="mb-4">Bu sınava kayıtlı öğrenci bilgisi bulunamadı.</p>
+            <ClientButton 
+              href="/exam-login" 
+              className="mt-4 bg-white text-red-700 px-4 py-2 rounded hover:bg-gray-100"
+            >
+              Giriş Sayfasına Dön
+            </ClientButton>
+          </div>
+        </div>
+      );
+    }
+    
+    // Sınav ve öğrenci verileri başarıyla alındı, şimdi işleme ve görüntüleme
+    return processAndRenderExam(examData, studentData, examId);
 
   } catch (error) {
     console.error('Token parse error:', error);
@@ -354,16 +283,18 @@ export default async function ExamPage({
   }
 }
 
-// ExamStudent verisini işleme yardımcı fonksiyonu ekleyelim
-function processExamData(examStudentData: any, examId: string) {
-  if (!examStudentData || !examStudentData.exams || !examStudentData.students) {
+// processAndRenderExam fonksiyonu ekleyelim
+function processAndRenderExam(examData: any, studentData: any, examId: string) {
+  // Sınav aktif değilse
+  if (!examData.is_active) {
     return (
-      <div className="text-red-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="bg-red-700 text-white p-6 rounded-lg max-w-md">
-          <h2 className="text-xl font-bold mb-4">Bu sınava kaydınız bulunmamaktadır</h2>
+      <div className="text-yellow-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
+        <div className="bg-yellow-700 text-white p-6 rounded-lg max-w-md">
+          <h2 className="text-xl font-bold mb-4">Bu sınav aktif değil</h2>
+          <p className="mb-4">Sınav yönetici tarafından durdurulmuş olabilir. Lütfen yöneticinizle iletişime geçin.</p>
           <ClientButton 
             href="/exam-login" 
-            className="mt-4 bg-white text-red-700 px-4 py-2 rounded hover:bg-gray-100"
+            className="mt-4 bg-white text-yellow-700 px-4 py-2 rounded hover:bg-gray-100"
           >
             Giriş Sayfasına Dön
           </ClientButton>
@@ -371,95 +302,55 @@ function processExamData(examStudentData: any, examId: string) {
       </div>
     );
   }
-
-  // examStudentData.exams bir dizi olduğu için ilk elemanını alıyoruz
-  if (Array.isArray(examStudentData.exams) && examStudentData.exams.length > 0) {
-    const examData = examStudentData.exams[0];
-    
-    // Sınav aktif değilse
-    if (!examData.is_active) {
-      return (
-        <div className="text-yellow-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
-          <div className="bg-yellow-700 text-white p-6 rounded-lg max-w-md">
-            <h2 className="text-xl font-bold mb-4">Bu sınav aktif değil</h2>
-            <p className="mb-4">Sınav yönetici tarafından durdurulmuş olabilir. Lütfen yöneticinizle iletişime geçin.</p>
-            <ClientButton 
-              href="/exam-login" 
-              className="mt-4 bg-white text-yellow-700 px-4 py-2 rounded hover:bg-gray-100"
-            >
-              Giriş Sayfasına Dön
-            </ClientButton>
-          </div>
-        </div>
-      );
+  
+  // Soru verilerini dönüştür ve indeks imzası ekle
+  const processedQuestions: Question[] = examData.questions.map((q: any) => ({
+    id: q.id,
+    question_text: q.question_text,
+    option_a: q.option_a,
+    option_b: q.option_b,
+    option_c: q.option_c,
+    option_d: q.option_d,
+    correct_answer: q.correct_answer,
+    points: q.points,
+    question_type: q.question_type
+  }));
+  
+  // Sınav verilerini düzenle
+  const processedExamData: Exam = {
+    id: examData.id,
+    title: examData.title,
+    description: examData.description,
+    duration: examData.duration,
+    is_active: examData.is_active,
+    passing_grade: examData.passing_grade,
+    questions: processedQuestions
+  };
+  
+  // Öğrenci verisi için bir dizi değil tek bir öğrenciye ihtiyaç var
+  const student = Array.isArray(studentData.students) 
+    ? studentData.students[0] 
+    : studentData.students;
+  
+  // Öğrenci verilerini düzenle  
+  const processedStudentData: ExamStudentData = {
+    id: studentData.id,
+    student_id: studentData.student_id,
+    exam_id: examId,
+    students: {
+      id: student.id,
+      name: student.name,
+      surname: student.surname,
+      phone: student.phone || ""
     }
-    
-    // Supabase'den gelen veriyi ExamClient bileşenine uygun şekilde dönüştür
-    // as unknown as T şeklinde tip dönüşümü yapmak daha güvenlidir
-    
-    // Soru verilerini dönüştür ve indeks imzası ekle
-    const processedQuestions: Question[] = examData.questions.map((q: any) => ({
-      id: q.id,
-      question_text: q.question_text,
-      option_a: q.option_a,
-      option_b: q.option_b,
-      option_c: q.option_c,
-      option_d: q.option_d,
-      correct_answer: q.correct_answer,
-      points: q.points,
-      question_type: q.question_type
-    }));
-    
-    // Sınav verilerini düzenle
-    const processedExamData: Exam = {
-      id: examData.id,
-      title: examData.title,
-      description: examData.description,
-      duration: examData.duration,
-      is_active: examData.is_active,
-      passing_grade: examData.passing_grade,
-      questions: processedQuestions
-    };
-    
-    // Öğrenci verisi için bir dizi değil tek bir öğrenciye ihtiyaç var
-    const student = Array.isArray(examStudentData.students) 
-      ? examStudentData.students[0] 
-      : examStudentData.students;
-    
-    // Öğrenci verilerini düzenle  
-    const processedStudentData: ExamStudentData = {
-      id: examStudentData.id,
-      student_id: examStudentData.student_id,
-      exam_id: examStudentData.exam_id,
-      students: {
-        id: student.id,
-        name: student.name,
-        surname: student.surname,
-        phone: student.phone
-      }
-    };
+  };
 
-    // Sınav verilerini Client component'e aktar
-    return (
-      <ExamClient 
-        examId={examId}
-        examData={processedExamData} 
-        studentData={processedStudentData}
-      />
-    );
-  } else {
-    return (
-      <div className="text-red-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="bg-red-700 text-white p-6 rounded-lg max-w-md">
-          <h2 className="text-xl font-bold mb-4">Sınav bilgileri bulunamadı</h2>
-          <ClientButton 
-            href="/exam-login" 
-            className="mt-4 bg-white text-red-700 px-4 py-2 rounded hover:bg-gray-100"
-          >
-            Giriş Sayfasına Dön
-          </ClientButton>
-        </div>
-      </div>
-    );
-  }
+  // Sınav verilerini Client component'e aktar
+  return (
+    <ExamClient 
+      examId={examId}
+      examData={processedExamData} 
+      studentData={processedStudentData}
+    />
+  );
 }
