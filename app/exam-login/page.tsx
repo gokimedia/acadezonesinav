@@ -48,7 +48,9 @@ export default function ExamLogin() {
     setError(null)
 
     try {
-      // İlk olarak exam_students tablosunda bu kodu arayalım
+      console.log("Giriş denenecek kod:", studentCode.trim())
+      
+      // İlk olarak exam_students tablosunda bu kodu arayalım - büyük/küçük harf duyarsız olarak
       const { data: examStudentsData, error: examStudentError } = await supabase
         .from('exam_students')
         .select(`
@@ -69,15 +71,29 @@ export default function ExamLogin() {
             surname
           )
         `)
-        .eq('student_code', studentCode.trim())
+        .ilike('student_code', studentCode.trim()) // büyük/küçük harf duyarsız arama
         .single()
+
+      console.log("Arama sonucu:", examStudentsData)
+      console.log("Hata:", examStudentError)
 
       // Hata kontrolü
       if (examStudentError) {
         // Hata kodlarına göre özel mesajlar gösterelim
         if (examStudentError.code === 'PGRST116') {
           // PGRST116: No rows returned (veri bulunamadı)
-          setError('Girdiğiniz öğrenci numarası sistemde bulunamadı. Lütfen kodu kontrol edin veya sınav yöneticinize başvurun.')
+          setError('Girdiğiniz öğrenci numarası sistemde bulunamadı. Lütfen kodu doğru girdiğinizden emin olun ve büyük/küçük harflere dikkat edin.')
+          
+          // Hata durumunu yazdır
+          console.log("Öğrenci kodu bulunamadı. Benzer kayıtları arıyoruz...")
+          
+          // Benzer öğrenci kodlarını arıyoruz (mümkünse)
+          const { data: similarStudents } = await supabase
+            .from('exam_students')
+            .select('student_code')
+            .limit(5)
+          
+          console.log("Sistemdeki bazı öğrenci kodları:", similarStudents)
         } else if (examStudentError.code === 'PGRST104') {
           // Syntax hatası
           setError('Girdiğiniz kodda geçersiz karakterler var. Lütfen doğru formatı kullanın.')
@@ -95,10 +111,13 @@ export default function ExamLogin() {
       }
 
       const typedExamStudentData = examStudentsData as unknown as ExamStudentData;
+      
+      console.log("Bulunan sınav bilgileri:", typedExamStudentData)
 
       // Sınav aktif mi kontrol et
       if (!typedExamStudentData.exam.is_active) {
-        setError('Bu sınav aktif değil. Sınav yöneticinizin sınavı başlatmasını bekleyin.')
+        console.log("Sınav aktif değil:", typedExamStudentData.exam)
+        setError('Bu sınav aktif değil. Lütfen sınav yöneticinizden sınavı aktif etmesini isteyin.')
         return
       }
       
@@ -157,9 +176,9 @@ export default function ExamLogin() {
                   id="studentCode"
                   type="text"
                   value={studentCode}
-                  onChange={(e) => setStudentCode(e.target.value)}
+                  onChange={(e) => setStudentCode(e.target.value.toUpperCase())}
                   className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Öğrenci numaranızı giriniz"
+                  placeholder="Örneğin: ACA123 veya EXAM123"
                   required
                 />
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
