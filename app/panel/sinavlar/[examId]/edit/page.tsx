@@ -564,6 +564,8 @@ export default function EditExamPage({ params }: { params: Promise<{ examId: str
           duration: exam.duration,
           is_active: exam.is_active,
           passing_grade: exam.passing_grade,
+          start_date: exam.start_date,
+          end_date: exam.end_date,
           updated_at: new Date().toISOString()
         })
         .eq('id', examId);
@@ -1461,6 +1463,57 @@ export default function EditExamPage({ params }: { params: Promise<{ examId: str
                 </div>
               </div>
             )}
+            
+            {/* Sınav Tarih ve Saat Ayarları */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-slate-100 bg-slate-50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <Calendar className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-800">
+                      Sınav Tarih ve Saatleri
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                      Sınavın başlangıç ve bitiş tarihlerini ayarlayın
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Başlangıç Tarihi ve Saati <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={exam.start_date ? new Date(exam.start_date).toISOString().slice(0, 16) : ''}
+                    onChange={(e) => setExam({ ...exam, start_date: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Öğrencilerin sınava başlayabileceği tarih ve saat
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Bitiş Tarihi ve Saati <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={exam.end_date ? new Date(exam.end_date).toISOString().slice(0, 16) : ''}
+                    onChange={(e) => setExam({ ...exam, end_date: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Sınavın bitiş tarihi ve saati
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         ) : activeTab === 'questions' ? (
           /* Questions Tab */
