@@ -102,12 +102,6 @@ export default function ExamLogin() {
         return
       }
       
-      // Bitiş tarihi varsa ve geçmişse sınava artık girilemez
-      if (typedExamStudentData.exam.end_date && new Date(typedExamStudentData.exam.end_date) < new Date()) {
-        setError('Bu sınavın süresi dolmuş. Artık giriş yapamazsınız.')
-        return
-      }
-
       // Sınav token'ını cookie'ye kaydet
       const tokenData = {
         examId: typedExamStudentData.exam_id,
