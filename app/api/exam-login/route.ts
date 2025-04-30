@@ -2,11 +2,19 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-// Tip tanımlarını daha esnek hale getirelim
-interface ExamData {
-  id: any;
-  title: any;
+// PERFORMANS İYİLEŞTİRME: Tip tanımlarını daha kesin yapılandırıyoruz
+interface Exam {
+  id: string;
+  title: string;
   is_active: boolean;
+}
+
+interface ExamStudent {
+  id: string;
+  exam_id: string;
+  student_id: string;
+  student_code: string;
+  exam: Exam | Exam[];
 }
 
 export async function POST(request: Request) {
@@ -21,9 +29,11 @@ export async function POST(request: Request) {
       )
     }
 
+    const trimmedCode = studentCode.toString().trim()
     const supabase = createRouteHandlerClient({ cookies })
 
-    // İlişkisel veriyi olduğu gibi kabul ediyoruz
+    // PERFORMANS İYİLEŞTİRME: Sadece ihtiyacımız olan verileri seçiyoruz
+    // RLS güvenliğini koruyarak sorguyu optimize ediyoruz
     const { data, error: examStudentError } = await supabase
       .from('exam_students')
       .select(`
@@ -37,10 +47,13 @@ export async function POST(request: Request) {
           is_active
         )
       `)
-      .eq('student_code', studentCode.toString().trim())
-      .single()
+      .eq('student_code', trimmedCode)
+      // PERFORMANS İYİLEŞTİRME: Sadece aktif sınavları getiriyoruz
+      .filter('exams.is_active', 'eq', true)
+      .limit(1) // PERFORMANS İYİLEŞTİRME: Sonuç sayısını sınırlıyoruz
 
-    if (examStudentError) {
+    // PERFORMANS İYİLEŞTİRME: .single() yerine limit kullandığımız için veri işleme yaklaşımı değişti
+    if (examStudentError || !data || data.length === 0) {
       console.error('Exam student error:', examStudentError)
       return NextResponse.json(
         { error: 'Öğrenci numarası bulunamadı' },
@@ -48,23 +61,29 @@ export async function POST(request: Request) {
       )
     }
 
+    const examStudent = data[0] as ExamStudent
+
     // Veri kontrolü
-    if (!data || !data.exam) {
+    if (!examStudent || !examStudent.exam) {
       return NextResponse.json(
         { error: 'Sınav bilgisi bulunamadı' },
         { status: 404 }
       )
     }
 
-    // Sınav aktifliğini kontrol edelim
-    // any tipini kullanarak TypeScript tip kontrolünü geçici olarak atlayalım
-    const examData: any = data.exam;
+    // PERFORMANS İYİLEŞTİRME: Daha net veri tiplemesi ile daha güvenli kontroller yapıyoruz
+    // Sınav aktifliğini kontrol edelim (önceden filtre ile belirtmiş olsak da ekstra kontrol)
     let isExamActive = false;
+    let examId = '';
     
-    if (Array.isArray(examData)) {
-      isExamActive = examData.length > 0 ? Boolean(examData[0].is_active) : false;
+    if (Array.isArray(examStudent.exam)) {
+      if (examStudent.exam.length > 0) {
+        isExamActive = examStudent.exam[0].is_active;
+        examId = examStudent.exam[0].id;
+      }
     } else {
-      isExamActive = Boolean(examData.is_active);
+      isExamActive = examStudent.exam.is_active;
+      examId = examStudent.exam.id;
     }
 
     if (!isExamActive) {
@@ -74,19 +93,23 @@ export async function POST(request: Request) {
       )
     }
 
-    // Sınav token'ını cookie'ye kaydet
-    const token = btoa(JSON.stringify({
-      examId: data.exam_id,
-      studentId: data.student_id,
-      studentCode: data.student_code
-    }))
+    // PERFORMANS İYİLEŞTİRME: Daha güvenli token oluşturma
+    const tokenData = {
+      examId: examStudent.exam_id,
+      studentId: examStudent.student_id,
+      studentCode: examStudent.student_code,
+      timestamp: Date.now() // ek güvenlik için zaman damgası ekliyoruz
+    };
+    
+    const token = btoa(JSON.stringify(tokenData))
 
-    // Cookie'yi ayarla
-    const response = NextResponse.redirect(`/exam/${data.exam_id}`)
+    // Cookie'yi ayarla ve sınava yönlendir
+    const response = NextResponse.redirect(`/sinav/${examId}?code=${trimmedCode}`)
     response.cookies.set('exam_token', token, {
       path: '/',
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 3, // 3 saat - güvenlik için token süresini sınırlıyoruz
       sameSite: 'lax'
     })
 

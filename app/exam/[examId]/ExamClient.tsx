@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 
@@ -56,7 +56,7 @@ export default function ExamClient({ examId, examData, studentData }: Props) {
   const [examSubmitted, setExamSubmitted] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [isExamActive, setIsExamActive] = useState(examData.is_active);
-  const supabase = createClientComponentClient();
+  const supabase = useMemo(() => createClientComponentClient(), []);
   const router = useRouter();
 
   // Öğrenci ve sınav verileri hazır mı kontrolü
@@ -94,8 +94,8 @@ export default function ExamClient({ examId, examData, studentData }: Props) {
     // İlk kontrol
     checkExamStatus();
     
-    // 30 saniyede bir kontrol et
-    const interval = setInterval(checkExamStatus, 30000);
+    // 60 saniyede bir kontrol et (30 saniyeden 60'a çıkarıldı - bağlantı sayısını azaltmak için)
+    const interval = setInterval(checkExamStatus, 60000);
     
     return () => clearInterval(interval);
   }, [examId, supabase, isExamActive]);
@@ -120,9 +120,10 @@ export default function ExamClient({ examId, examData, studentData }: Props) {
     if (!isDataReady) return;
     
     try {
+      // Tek sorguda daha fazla veriyi almak için daha verimli sorgu
       const { data: existingAnswers, error: answersError } = await supabase
         .from('answers')
-        .select('question_id, student_answer')
+        .select('question_id, student_answer, is_correct')
         .eq('exam_id', examData.id)
         .eq('student_id', studentData.students.id);
 
@@ -246,33 +247,26 @@ export default function ExamClient({ examId, examData, studentData }: Props) {
         [questionId]: answer
       }));
 
-      // Mevcut cevabı sil
-      const { error: deleteError } = await supabase
+      // Upsert (insert veya update) kullanarak tek sorguda işlem yap
+      // Bu, önce silip sonra ekleme yerine daha verimli bir yaklaşımdır
+      const { error: upsertError } = await supabase
         .from('answers')
-        .delete()
-        .eq('exam_id', examData.id)
-        .eq('question_id', questionId)
-        .eq('student_id', studentData.students.id);
-
-      if (deleteError) {
-        console.error('Eski cevap silinirken hata:', deleteError);
-        // Silme hatası kritik değil, devam et
-      }
-
-      // Yeni cevabı kaydet
-      const { error: insertError } = await supabase
-        .from('answers')
-        .insert({
+        .upsert({
           exam_id: examData.id,
           question_id: questionId,
           student_id: studentData.students.id,
           student_answer: answer,
           is_correct: answer.toLowerCase() === currentQuestion.correct_answer.toLowerCase()
-        });
+        }, { onConflict: 'exam_id,question_id,student_id' });
 
-      if (insertError) {
-        console.error('Cevap kaydedilirken hata:', insertError);
+      if (upsertError) {
+        console.error('Cevap kaydedilirken hata:', upsertError);
         setError('Cevabınız kaydedilirken bir hata oluştu. Lütfen tekrar deneyin.');
+        
+        // Hata durumunda yeniden deneme mekanizması
+        setTimeout(() => {
+          handleAnswerSelect(questionId, answer);
+        }, 2000);
         return;
       }
     } catch (error) {

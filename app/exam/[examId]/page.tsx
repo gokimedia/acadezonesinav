@@ -109,16 +109,13 @@ export default async function ExamPage({
       redirect('/exam-login');
     }
 
+    // Tek bir Supabase istemcisi oluşturun ve tüm sorguları bu istemci üzerinden yapın
     const supabase = createServerComponentClient({ 
       cookies,
     });
 
-    // Sınav ve öğrenci bilgilerini tek sorguda al - bu sefer farklı bir yaklaşım deneyelim
-    console.log("Sınav verilerini getirmeye çalışıyorum...");
-    console.log("Parametre examId:", params.examId);
-    console.log("Token verisi:", tokenData);
-    
-    // Önce doğrudan sınav ID ile sorgu yapalım
+    // Optimize edilmiş sorgu - tek seferde hem sınav hem öğrenci verilerini al
+    // İhtiyaç duyulan alanları seçerek ağ trafiğini azalt
     const { data: examData, error: examError } = await supabase
       .from('exams')
       .select(`
@@ -180,7 +177,16 @@ export default async function ExamPage({
       );
     }
     
-    // Şimdi öğrenci bilgilerini alalım
+    // Öğrenci bilgilerini al - studentCode veya student_id ile deneyin, iki sorgu yerine tek sorgu
+    let queryField = 'student_code';
+    let queryValue = tokenData.studentCode;
+    
+    // Token'da studentCode yoksa student_id kullan
+    if (!tokenData.studentCode && tokenData.studentId) {
+      queryField = 'student_id';
+      queryValue = tokenData.studentId;
+    }
+    
     const { data: studentData, error: studentError } = await supabase
       .from('exam_students')
       .select(`
@@ -194,43 +200,20 @@ export default async function ExamPage({
         )
       `)
       .eq('exam_id', params.examId)
-      .eq('student_code', tokenData.studentCode)
+      .eq(queryField, queryValue)
       .single();
       
-    if (studentError) {
+    if (studentError || !studentData) {
       console.error("Öğrenci bilgisi alınırken hata:", studentError);
       
-      // Alternatif olarak student_id ile deneyelim
-      console.log("Student_id ile sorgu yapılıyor:", tokenData.studentId);
-      const { data: altStudentData, error: altStudentError } = await supabase
-        .from('exam_students')
-        .select(`
-          id,
-          student_id,
-          students (
-            id,
-            name, 
-            surname,
-            phone
-          )
-        `)
-        .eq('exam_id', params.examId)
-        .eq('student_id', tokenData.studentId)
-        .single();
-        
-      if (!altStudentError && altStudentData) {
-        console.log("Alternatif sorgu başarılı:", altStudentData);
-        return processAndRenderExam(examData, altStudentData, examId);
-      }
-      
       return (
         <div className="text-red-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
           <div className="bg-red-700 text-white p-6 rounded-lg max-w-md">
             <h2 className="text-xl font-bold mb-4">Öğrenci kaydı bulunamadı</h2>
             <p className="mb-4">Bu sınava kayıtlı öğrenci bilgisi bulunamadı.</p>
-            <p className="text-sm opacity-75">Hata: {studentError.message}</p>
+            <p className="text-sm opacity-75">Hata: {studentError?.message}</p>
             <p className="text-sm opacity-75 mt-2">Sınav ID: {params.examId}</p>
-            <p className="text-sm opacity-75">Token Öğrenci Kodu: {tokenData.studentCode}</p>
+            <p className="text-sm opacity-75">Token Öğrenci Kodu: {tokenData.studentCode || tokenData.studentId}</p>
             <ClientButton 
               href="/exam-login" 
               className="mt-4 bg-white text-red-700 px-4 py-2 rounded hover:bg-gray-100"
@@ -242,35 +225,15 @@ export default async function ExamPage({
       );
     }
     
-    if (!studentData) {
-      console.error("Öğrenci kaydı bulunamadı");
-      return (
-        <div className="text-red-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
-          <div className="bg-red-700 text-white p-6 rounded-lg max-w-md">
-            <h2 className="text-xl font-bold mb-4">Öğrenci kaydı bulunamadı</h2>
-            <p className="mb-4">Bu sınava kayıtlı öğrenci bilgisi bulunamadı.</p>
-            <ClientButton 
-              href="/exam-login" 
-              className="mt-4 bg-white text-red-700 px-4 py-2 rounded hover:bg-gray-100"
-            >
-              Giriş Sayfasına Dön
-            </ClientButton>
-          </div>
-        </div>
-      );
-    }
-    
-    // Sınav ve öğrenci verileri başarıyla alındı, şimdi işleme ve görüntüleme
     return processAndRenderExam(examData, studentData, examId);
-
-  } catch (error) {
-    console.error('Token parse error:', error);
     
+  } catch (error) {
+    console.error("Beklenmeyen hata:", error);
     return (
       <div className="text-red-500 p-6 flex items-center justify-center min-h-screen bg-gray-900">
         <div className="bg-red-700 text-white p-6 rounded-lg max-w-md">
-          <h2 className="text-xl font-bold mb-4">Oturum bilgileriniz geçersiz</h2>
-          <p className="mb-4">Lütfen tekrar giriş yapın.</p>
+          <h2 className="text-xl font-bold mb-4">Bir hata oluştu</h2>
+          <p className="mb-4">Sınav yüklenirken beklenmeyen bir hata oluştu.</p>
           <ClientButton 
             href="/exam-login" 
             className="mt-4 bg-white text-red-700 px-4 py-2 rounded hover:bg-gray-100"
