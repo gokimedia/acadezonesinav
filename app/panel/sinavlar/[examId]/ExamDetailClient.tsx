@@ -12,7 +12,7 @@ interface Exam {
   duration: number;
   start_time: string;
   end_time: string;
-  status: string;
+  is_active: boolean;
   department_id: string;
 }
 
@@ -76,13 +76,23 @@ export default function ExamDetailClient({ examId }: { examId: string }) {
 
   const handleStatusChange = async (newStatus: string) => {
     try {
+      let isActive = false;
+      
+      if (newStatus === 'active') {
+        isActive = true;
+      } else if (newStatus === 'pending' || newStatus === 'completed') {
+        isActive = false;
+      }
+      
       const { error } = await supabase
         .from('exams')
-        .update({ status: newStatus })
+        .update({ is_active: isActive })
         .eq('id', examId);
 
       if (error) throw error;
-      setExam(exam ? { ...exam, status: newStatus } : null);
+      
+      // Yerel durum güncellemesi
+      setExam(exam ? { ...exam, is_active: isActive } : null);
     } catch (error) {
       console.error('Error updating exam status:', error);
     }
@@ -107,9 +117,9 @@ export default function ExamDetailClient({ examId }: { examId: string }) {
   if (loading) return <div>Yükleniyor...</div>;
   if (!exam) return <div>Sınav bulunamadı</div>;
 
-  const isActive = exam.status === 'active';
-  const isPending = exam.status === 'pending';
-  const isCompleted = exam.status === 'completed';
+  const isActive = exam.is_active;
+  const isPending = !exam.is_active;
+  const isCompleted = !exam.is_active;
 
   return (
     <div className="p-6">
@@ -145,7 +155,7 @@ export default function ExamDetailClient({ examId }: { examId: string }) {
                 isPending ? 'bg-yellow-100 text-yellow-800' :
                 'bg-gray-100 text-gray-800'
               }`}>
-                {exam.status}
+                {isActive ? 'Aktif' : 'Beklemede'}
               </span>
             </p>
           </div>
