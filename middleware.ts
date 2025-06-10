@@ -153,6 +153,6 @@ export const config = {
   matcher: [
     '/panel/:path*',  // Yönetici paneli
     '/login',         // Login sayfası
-    '/exam/:path*',   // Sınav sayfaları
+    '/sinav/:path*',  // Sınav sayfaları
   ],
 }
